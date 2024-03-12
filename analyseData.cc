@@ -25,15 +25,12 @@
 constexpr int nDCAbins = 37;
 constexpr double DCAbinning[]{-0.2,-0.15,-0.125,-0.1,-0.075,-0.05,-0.025,-0.023,-0.021,-0.019,-0.017,-0.015,-0.013,-0.011,-0.009,-0.007,-0.005,-0.003,-0.001,0.001,0.003,0.005,0.007,0.009,0.011,0.013,0.015,0.017,0.019,0.021,0.023, 0.025, 0.05,0.075,0.1,0.125,0.15,0.2};
 
-void analyseData(std::string inputFileName = "data/MergedTrees.root", std::string outputFileName = "data/dataSmall.root", bool skim = true)
+void analyseData(std::string inputFileName = kDataTreeFilename, std::string outputFileName = kDataFilename, bool skim = false)
 {
   gStyle->SetOptStat(0);
   ROOT::EnableImplicitMT();
   ROOT::RDataFrame d("O2nucleitable", inputFileName);
-  auto df = d.Define("ptUncorr", "2 * std::abs(fPt)").Define("pt", "ptUncorr + 2.98019e-02 + 7.66100e-01 * std::exp(-1.31641e+00 * ptUncorr)").Define("p", "pt * cosh(fEta)").Define("tofMass", "fBeta < 1.e-3 ? 1.e9 : fBeta >= 1. ? 0 : fTPCInnerParam * 2 * sqrt(1.f / (fBeta * fBeta) - 1.f)").Define("matter", "fPt > 0").Define("nsigmaHe3", nsigmaHe3, {"fTPCInnerParam", "fTPCsignal"}).Define("nsigmaH3", nsigmaH3, {"fTPCInnerParam", "fTPCsignal"}).Define("nsigmaHe4", nsigmaHe4, {"fTPCInnerParam", "fTPCsignal"}).Define("nITSclsIB", "int(0) + bool(fITSclsMap & 1) + bool(fITSclsMap & 2) + bool(fITSclsMap & 4)").Define("nITScls", "nITSclsIB + bool(fITSclsMap & 8) + bool(fITSclsMap & 16) + bool(fITSclsMap & 32) + bool(fITSclsMap & 64)").Define("hasTOF", "fFlags & (1 << 4)").Filter("abs(fEta) < 0.9").Define("isReconstructed", "fFlags & (1 << 5)").Define("isPrimary", "fFlags & (1 << 8)").Define("isSecondaryFromMaterial", "fFlags & (1 << 9)").Define("isSecondaryFromWeakDecay", "fFlags & (1 << 10)").Define("deltaMass", "tofMass - 2.80839").Define("nsigmaDCAxy", nSigmaDCAxy, {"pt", "fDCAxy"}).Define("nsigmaDCAz", nSigmaDCAz, {"pt", "fDCAz"});
-
-  auto dfBase = df.Filter("isReconstructed && std::abs(fEta) < 0.9");
-
+  auto dfBase = defineColumnsForData(d).Filter("abs(fEta) < 0.9");
   auto dfPrimary = dfBase.Filter("fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) < 7 && std::abs(fDCAxy) < 0.2");
   auto dfSecondary = dfBase.Filter("fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) > 7 && std::abs(fDCAxy) < 0.2");
 

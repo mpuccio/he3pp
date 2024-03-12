@@ -1,6 +1,8 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include "ROOT/RDataFrame.hxx"
+
 #include <iostream>
 #include <map>
 #include <string>
@@ -10,6 +12,7 @@
 #include <TF1.h>
 #include <TObject.h>
 #include <TMath.h>
+#include <TSystem.h>
 
 using std::map;
 using std::string;
@@ -19,11 +22,17 @@ const char   kLetter[2] = {'M','A'}; // M -> Matter, A -> Anti-matter
 const string kNames[2] = {"he3","antihe3"};
 const string kLabels[2] = {"^{3}He","^{3}#bar{He}"};
 
-const string kBaseOutputDir = "/Users/mpuccio/alice/Helium-pp/output/";
-const string kBaseInputDir = "/Users/mpuccio/alice/Helium-pp/";
+const string kMCproduction = "LHC23j6b";
+const string kRecoPass = "apass4";
+const string kPeriod = "LHC22o_medium";
 
-const string kDataFilename = kBaseInputDir + "data/dataMedium.root";
-const string kMCfilename = kBaseInputDir + "MC/MCpub_newMC.root";
+const string kBaseOutputDir = "$NUCLEI_OUTPUT/" + kPeriod + "/" + kRecoPass + "/";
+const string kBaseInputDir = "$NUCLEI_INPUT/";
+
+const string kDataTreeFilename = kBaseInputDir + "data/" + kPeriod + "/" + kRecoPass + "/MergedAO2D.root";
+const string kDataFilename = kBaseInputDir + "data/" + kPeriod + "/" + kRecoPass + "/DataHistos.root";
+const string kMCtreeFilename = kBaseInputDir + "MC/" + kMCproduction + "/MergedAO2D.root";
+const string kMCfilename = kBaseInputDir + "MC/" + kMCproduction + "/MChistos.root";
 
 const string kFilterListNames = "nuclei";
 const string kNormalisationList = "mpuccio_NucleiPIDqa";
@@ -45,10 +54,7 @@ const bool   kPrintFigures{true};
 const string kFiguresFolder = "/Users/lbariogl/cernbox/Deuterons13TeV/macros/results/images/";
 const string kMacrosFolder = "/Users/lbariogl/cernbox/Deuterons13TeV/macros/results/images/macros/";
 
-// constexpr int    kNPtBins = 11;
 constexpr int    kNPtBins = 6;
-// constexpr double  kPtBins[kNPtBins+1] = {1.4,1.8,2.2,2.6,3.0,3.4,3.8,4.4,5.2,6.0,7.0};
-// constexpr double  kPtBins[kNPtBins+1] = {0.8,1.2,1.6,2.,2.4,2.8,3.2,3.6,4.,4.8,6.0,7.0};
 constexpr double  kPtBins[kNPtBins+1] = {1.,1.5,2.0,2.5,3.0,4.0,5.0};
 const float  kCentralityBins[2] = {0.f,100.f};
 const int    kNCentralityBins = 1;
@@ -72,7 +78,7 @@ constexpr int kNTPCfunctions = 3;
 const std::string kTPCfunctName[4]{"GausGaus", "ExpGaus", "ExpTailGaus", "LognormalLognormal"};
 
 
-std::map<string,vector<float> > kCutNames {{"fDCAz", {6, 7, 8}},{"fTPCnCls", {110, 120, 130}},{"nITScls", {5, 6, 7}}, {"nsigmaTPC", {3, 4, 5}}};
+std::map<string,vector<float> > kCutNames {{"nsigmaDCAz", {6, 7, 8}},{"fTPCnCls", {110, 120, 130}},{"nITScls", {5, 6, 7}}, {"nsigmaTPC", {3, 4, 5}}};
 
 double bb(double bg, double kp1, double kp2, double kp3, double kp4, double kp5)
 {
@@ -111,6 +117,25 @@ float nSigmaDCAz(double pt, float dcaz) {
   return dcaz / DCAzCut(pt, 1);
 }
 
+auto defineColumnsForData(ROOT::RDataFrame& d) {
+  return d.Define("ptUncorr", "2 * std::abs(fPt)")
+          .Define("pt", "ptUncorr + 0.0343554 + 0.96161 * std::exp(-1.51286 * ptUncorr)")
+          .Define("p", "pt * cosh(fEta)")
+          .Define("tofMass", "fBeta < 1.e-3 ? 1.e9 : fBeta >= 1. ? 0 : fTPCInnerParam * 2 * sqrt(1.f / (fBeta * fBeta) - 1.f)")
+          .Define("matter", "fPt > 0")
+          .Define("nsigmaHe3", nsigmaHe3, {"fTPCInnerParam", "fTPCsignal"})
+          .Define("nsigmaH3", nsigmaH3, {"fTPCInnerParam", "fTPCsignal"})
+          .Define("nsigmaHe4", nsigmaHe4, {"fTPCInnerParam", "fTPCsignal"})
+          .Define("nITSclsIB", "int(0) + bool(fITSclsMap & 1) + bool(fITSclsMap & 2) + bool(fITSclsMap & 4)")
+          .Define("nITScls", "nITSclsIB + bool(fITSclsMap & 8) + bool(fITSclsMap & 16) + bool(fITSclsMap & 32) + bool(fITSclsMap & 64)")
+          .Define("hasTOF", "fFlags & (1 << 5)")
+          .Define("isPrimary", "fFlags & (1 << 9)")
+          .Define("isSecondaryFromMaterial", "fFlags & (1 << 10)")
+          .Define("isSecondaryFromWeakDecay", "fFlags & (1 << 11)")
+          .Define("deltaMass", "tofMass - 2.80839")
+          .Define("nsigmaDCAxy", nSigmaDCAxy, {"pt", "fDCAxy"})
+          .Define("nsigmaDCAz", nSigmaDCAz, {"pt", "fDCAz"});
+}
 
 
 #endif
