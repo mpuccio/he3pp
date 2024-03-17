@@ -6,9 +6,19 @@
 #include "src/Common.h"
 
 void Systematics() {
-  TFile fData("output/signalPub.root");
-  TFile fMC("MC/MCpub.root");
+  TFile fData(kSignalOutput.data());
+  TFile fMC(kMCfilename.data());
 
+  TFile anResults(kDataAnalysisResults.data());
+  TH1* hNtvx = (TH1*)anResults.Get("bc-selection-task/hCounterTVX");
+  TH1* hNcol = (TH1*)anResults.Get("event-selection-task/hColCounterAcc");
+  TH1* hNvtx = (TH1*)anResults.Get("nuclei-spectra/spectra/hRecVtxZData");
+  double nVerticesNoCut{hNcol->GetEntries()};
+  double nVertices{hNvtx->GetEntries()};
+  double nTVX{hNtvx->GetEntries()};
+  double effTVX{0.756};
+  double vertexingEff{0.921};
+  double norm{nTVX * vertexingEff / effTVX};
 
   TH2D *systTPC[2];
   TH2D *systTOF[2];
@@ -34,7 +44,6 @@ void Systematics() {
     listData->ls();
     std::cout << "Reading " << list_key->GetName() << "\t" << listData << "\t" << listMC << std::endl;
 
-
     std::string TOFnames[2]{"hRawCounts", "hRawCountsBinCounting"};
     std::string TOFpresel[3]{"", "_loose", "_tight"};
     TH1* hDataTOF[2][2][3];//{{nullptr, nullptr}, {nullptr, nullptr}};
@@ -56,12 +65,12 @@ void Systematics() {
       if (!defaultEffTOF[iS])
         defaultEffTOF[iS] = (TH1*)hEffTOF[iS]->Clone(Form("defaultEffTOF%s", kNames[iS].data()));
 
-      for (int iTOFpresel{0}; iTOFpresel < 3; ++iTOFpresel) {
+      for (int iTOFpresel{0}; iTOFpresel < 1; ++iTOFpresel) {
         for (int iTOF{0}; iTOF < 2; ++iTOF) {
           std::string name{TOFnames[iTOF] + kLetter[iS]};
           hDataTOF[iS][iTOF][iTOFpresel]=(TH1*)dataDir->Get(Form("GausExp/%s0%s", name.data(), TOFpresel[iTOFpresel].data()));
           if (!hDataTOF[iS][iTOF][iTOFpresel])
-            std::cout << "Missing " << Form("%s/GausExp/%s%s0", kNames[iS].data(), TOFnames[iTOF].data(), kLetter[iS]) << std::endl;
+            std::cout << "Missing " << Form("%s/GausExp/%s%s0", kNames[iS].data(), TOFnames[iTOF].data(), kLetter[iS]) << std::flush << std::endl;
           if (!defaultTOFuncorr[iS])
             defaultTOFuncorr[iS] = (TH1*)hDataTOF[iS][iTOF][iTOFpresel]->Clone(Form("defaultTOFuncorr%s", kNames[iS].data()));
           hDataTOF[iS][iTOF][iTOFpresel]->Divide(hEffTOF[iS]);
@@ -92,7 +101,7 @@ void Systematics() {
           float value = hDataTPC[iS][iTPC]->GetBinContent(iB);
           systTPC[iS]->Fill(pt, (value - defaultValueTPC) / defaultValueTPC);
         }
-        for (int iTOFpresel{0}; iTOFpresel < 3; ++iTOFpresel) {
+        for (int iTOFpresel{0}; iTOFpresel < 1; ++iTOFpresel) {
           for (int iTOF{0}; iTOF < 2; ++iTOF) {
             float value = hDataTOF[iS][iTOF][iTOFpresel]->GetBinContent(iB);
             systTOF[iS]->Fill(pt, (value - defaultValueTOF) / defaultValueTOF);
@@ -110,11 +119,10 @@ void Systematics() {
     for (int iB{1}; iB <= kNPtBins; ++iB) {
       hSystTPC[iS]->SetBinContent(iB, systTPC[iS]->ProjectionY("", iB, iB)->GetRMS());
       hSystTOF[iS]->SetBinContent(iB, systTOF[iS]->ProjectionY("", iB, iB)->GetRMS());
-
     }
   }
 
-  TFile syst("output/systematicMedium_test.root", "recreate");
+  TFile syst(kSystematicsOutput.data(), "recreate");
 
   TH1* tofMatchingM = (TH1*)defaultTOFuncorr[0]->Clone(Form("TOFmatching%s", kNames[0].data()));
   TH1* tofMatchingA = (TH1*)defaultTOFuncorr[1]->Clone(Form("TOFmatching%s", kNames[1].data()));
@@ -145,14 +153,6 @@ void Systematics() {
   systTOF[0]->DrawClone("col");
     new TCanvas;
   systTOF[1]->DrawClone("col");
-
-  double nVerticesNoCut{5.5787500e+11};
-  double nVertices{5.3263550e+11};
-  double nTVX{5.9228154e+11};
-  double effTVX{0.756};
-  double vertexingEff{0.921};
-
-  double norm{nTVX * vertexingEff / effTVX};
 
   constexpr int pubBinning{6};
   constexpr double pubBins[pubBinning + 1]{1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0};

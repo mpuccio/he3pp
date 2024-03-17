@@ -26,7 +26,7 @@ float weight(float pt)
   return (5.04194/1.3645054) * pt * std::exp(-pt * 1.35934);
 }
 
-void analyseMC(std::string inputFileName = kMCtreeFilename, std::string outputFileName = kMCfilename, bool enableTrials = false)
+void analyseMC(std::string inputFileName = kMCtreeFilename, std::string outputFileName = kMCfilename, bool enableTrials = true)
 {
   inputFileName = gSystem->ExpandPathName(inputFileName.data());
   outputFileName = gSystem->ExpandPathName(outputFileName.data());

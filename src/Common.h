@@ -24,40 +24,24 @@ const string kLabels[2] = {"^{3}He","^{3}#bar{He}"};
 
 const string kMCproduction = "LHC23j6b";
 const string kRecoPass = "apass4";
-const string kPeriod = "LHC22o_medium";
+const string kPeriod = "LHC22";
 
 const string kBaseOutputDir = "$NUCLEI_OUTPUT/" + kPeriod + "/" + kRecoPass + "/";
 const string kBaseInputDir = "$NUCLEI_INPUT/";
 
 const string kDataTreeFilename = kBaseInputDir + "data/" + kPeriod + "/" + kRecoPass + "/MergedAO2D.root";
 const string kDataFilename = kBaseInputDir + "data/" + kPeriod + "/" + kRecoPass + "/DataHistos.root";
+const string kDataAnalysisResults = kBaseInputDir + "data/" + kPeriod + "/" + kRecoPass + "/AnalysisResults.root";
 const string kMCtreeFilename = kBaseInputDir + "MC/" + kMCproduction + "/MergedAO2D.root";
 const string kMCfilename = kBaseInputDir + "MC/" + kMCproduction + "/MChistos.root";
 
 const string kFilterListNames = "nuclei";
-const string kNormalisationList = "mpuccio_NucleiPIDqa";
 
-const string kEfficiencyOutput = kBaseOutputDir + "efficiency.root";
-const string kSignalOutput = kBaseOutputDir + "signalMedium.root";
-const string kSecondariesOutput = kBaseOutputDir + "secondaries.root";
-const string kSecondariesOutputRooFit = kBaseOutputDir + "RooSec.root";
-const string kSecondariesTPCoutput = kBaseOutputDir + "secondaries_TPC.root";
-const string kSecondariesTPCoutputRooFit = kBaseOutputDir + "RooSecTPC.root";
-const string kMaterialOutput = kBaseOutputDir + "materialbudget.root";
-const string kSpectraOutput = kBaseOutputDir + "spectra.root";
-const string kFitSystematicsOutput = kBaseOutputDir + "fitsystematics.root";
+const string kSignalOutput = kBaseOutputDir + "signal.root";
 const string kSystematicsOutput = kBaseOutputDir + "systematics.root";
-const string kSystematicsOutputTPC = kBaseOutputDir + "systematics_TPC.root";
-const string kFinalOutput = kBaseOutputDir + "final.root";
-
-const bool   kPrintFigures{true};
-const string kFiguresFolder = "/Users/lbariogl/cernbox/Deuterons13TeV/macros/results/images/";
-const string kMacrosFolder = "/Users/lbariogl/cernbox/Deuterons13TeV/macros/results/images/macros/";
 
 constexpr int    kNPtBins = 6;
 constexpr double  kPtBins[kNPtBins+1] = {1.,1.5,2.0,2.5,3.0,4.0,5.0};
-const float  kCentralityBins[2] = {0.f,100.f};
-const int    kNCentralityBins = 1;
 
 const int    kCentLength = 1;
 const int    kCentBinsArray[kCentLength][2] = {{2,2}};
@@ -67,11 +51,8 @@ const float  kCentLabels[kCentLength][2] = {{0.,100.}};
 const float  kTPCmaxPt = 7.0f;
 const float  kTOFminPt = 1.f;
 const float  kPtRange[2] = {1.4,7};
-const float  kPtRangeMatCorrection[2] = {1.05,1.55};
-const float  kPtRangeMatCorrectionTPC[2] = {0.65,1.35};
 
 const bool   kUseBarlow{true};
-const bool   kSmoothSystematics{true};
 const float  kAbsSyst[2] = {0.08,0.1f};
 
 constexpr int kNTPCfunctions = 3;
@@ -79,6 +60,7 @@ const std::string kTPCfunctName[4]{"GausGaus", "ExpGaus", "ExpTailGaus", "Lognor
 
 
 std::map<string,vector<float> > kCutNames {{"nsigmaDCAz", {6, 7, 8}},{"fTPCnCls", {110, 120, 130}},{"nITScls", {5, 6, 7}}, {"nsigmaTPC", {3, 4, 5}}};
+size_t nTrials{kCutNames["fDCAz"].size() * kCutNames["fTPCnCls"].size() * kCutNames["nITScls"].size()};
 
 double bb(double bg, double kp1, double kp2, double kp3, double kp4, double kp5)
 {
@@ -132,7 +114,8 @@ auto defineColumnsForData(ROOT::RDataFrame& d) {
           .Define("isPrimary", "fFlags & (1 << 9)")
           .Define("isSecondaryFromMaterial", "fFlags & (1 << 10)")
           .Define("isSecondaryFromWeakDecay", "fFlags & (1 << 11)")
-          .Define("deltaMass", "tofMass - 2.80839")
+          .Define("deltaMassHe3", "tofMass - 2.80839")
+          .Define("hasGoodTOFmassHe3", "!hasTOF || std::abs(deltaMassHe3) < 0.6")
           .Define("nsigmaDCAxy", nSigmaDCAxy, {"pt", "fDCAxy"})
           .Define("nsigmaDCAz", nSigmaDCAz, {"pt", "fDCAz"});
 }
