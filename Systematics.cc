@@ -18,7 +18,8 @@ void Systematics() {
   double nTVX{hNtvx->GetEntries()};
   double effTVX{0.756};
   double vertexingEff{0.921};
-  double norm{nTVX * vertexingEff / effTVX};
+  // double norm{nTVX * vertexingEff / effTVX};
+  double norm{nVertices};
 
   TH2D *systTPC[2];
   TH2D *systTOF[2];
@@ -65,18 +66,16 @@ void Systematics() {
       if (!defaultEffTOF[iS])
         defaultEffTOF[iS] = (TH1*)hEffTOF[iS]->Clone(Form("defaultEffTOF%s", kNames[iS].data()));
 
-      for (int iTOFpresel{0}; iTOFpresel < 1; ++iTOFpresel) {
-        for (int iTOF{0}; iTOF < 2; ++iTOF) {
-          std::string name{TOFnames[iTOF] + kLetter[iS]};
-          hDataTOF[iS][iTOF][iTOFpresel]=(TH1*)dataDir->Get(Form("GausExp/%s0%s", name.data(), TOFpresel[iTOFpresel].data()));
-          if (!hDataTOF[iS][iTOF][iTOFpresel])
-            std::cout << "Missing " << Form("%s/GausExp/%s%s0", kNames[iS].data(), TOFnames[iTOF].data(), kLetter[iS]) << std::flush << std::endl;
-          if (!defaultTOFuncorr[iS])
-            defaultTOFuncorr[iS] = (TH1*)hDataTOF[iS][iTOF][iTOFpresel]->Clone(Form("defaultTOFuncorr%s", kNames[iS].data()));
-          hDataTOF[iS][iTOF][iTOFpresel]->Divide(hEffTOF[iS]);
-          if (!defaultTOF[iS])
-            defaultTOF[iS] = (TH1*)hDataTOF[iS][iTOF][iTOFpresel]->Clone(Form("defaultTOF%s", kNames[iS].data()));
-        }
+      for (int iTOF{0}; iTOF < 2; ++iTOF) {
+        std::string name{TOFnames[iTOF] + kLetter[iS]};
+        hDataTOF[iS][iTOF][0]=(TH1*)dataDir->Get(Form("GausExp/%s0%s", name.data(), TOFpresel[0].data()));
+        if (!hDataTOF[iS][iTOF][0])
+          std::cout << "Missing " << Form("%s/GausExp/%s%s0", kNames[iS].data(), TOFnames[iTOF].data(), kLetter[iS]) << std::flush << std::endl;
+        if (!defaultTOFuncorr[iS])
+          defaultTOFuncorr[iS] = (TH1*)hDataTOF[iS][iTOF][0]->Clone(Form("defaultTOFuncorr%s", kNames[iS].data()));
+        hDataTOF[iS][iTOF][0]->Divide(hEffTOF[iS]);
+        if (!defaultTOF[iS])
+          defaultTOF[iS] = (TH1*)hDataTOF[iS][iTOF][0]->Clone(Form("defaultTOF%s", kNames[iS].data()));
       }
       for (int iTPC{0}; iTPC < 3; ++iTPC) {
         std::string name{kTPCfunctName[iTPC]};
@@ -101,11 +100,9 @@ void Systematics() {
           float value = hDataTPC[iS][iTPC]->GetBinContent(iB);
           systTPC[iS]->Fill(pt, (value - defaultValueTPC) / defaultValueTPC);
         }
-        for (int iTOFpresel{0}; iTOFpresel < 1; ++iTOFpresel) {
-          for (int iTOF{0}; iTOF < 2; ++iTOF) {
-            float value = hDataTOF[iS][iTOF][iTOFpresel]->GetBinContent(iB);
-            systTOF[iS]->Fill(pt, (value - defaultValueTOF) / defaultValueTOF);
-          }
+        for (int iTOF{0}; iTOF < 2; ++iTOF) {
+          float value = hDataTOF[iS][iTOF][0]->GetBinContent(iB);
+          systTOF[iS]->Fill(pt, (value - defaultValueTOF) / defaultValueTOF);
         }
       }
     }
@@ -227,10 +224,6 @@ void Systematics() {
         fSystTOF->SetBinError(iBin, 0);
       }
     }
-    // fStatTPC->Scale(1./nVertices);
-    // fSystTPC->Scale(1./nVertices);
-    // fStatTOF->Scale(1./nVertices);
-    // fSystTOF->Scale(1./nVertices);
 
     fStatTPC->Scale(1./norm, "width");
     fSystTPC->Scale(1./norm, "width");
