@@ -35,6 +35,7 @@ const string kDataTreeFilename = kBaseInputDir + "data/" + kPeriod + "/" + kReco
 const string kDataFilename = kBaseInputDir + "data/" + kPeriod + "/" + kRecoPass + "/DataHistos" + kVariant + ".root";
 const string kDataFilenameHe4 = kBaseInputDir + "data/" + kPeriod + "/" + kRecoPass + "/DataHistosHe4" + kVariant + ".root";
 const string kDataAnalysisResults = kBaseInputDir + "data/" + kPeriod + "/" + kRecoPass + "/AnalysisResults.root";
+const string kMCAnalysisResults = kBaseInputDir + "MC/" + kMCproduction + "/AnalysisResults.root";
 const string kMCtreeFilename = kBaseInputDir + "MC/" + kMCproduction + "/MergedAO2D.root";
 const string kMCfilename = kBaseInputDir + "MC/" + kMCproduction + "/MChistos"  + kVariant + ".root";
 const string kMCfilenameHe4 = kBaseInputDir + "MC/" + kMCproduction + "/MChistosHe4"  + kVariant + ".root";

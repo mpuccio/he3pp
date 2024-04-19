@@ -163,7 +163,9 @@ void Systematics() {
   hPubSyst->SetLineColor(kBlack);
   hPub->SetMarkerColor(kBlack);
   hPubSyst->SetMarkerColor(kBlack);
+  hPub->SetMarkerStyle(5);
   hPub->SetMarkerSize(1);
+  hPubSyst->SetMarkerStyle(5);
   hPubSyst->SetMarkerSize(1);
   hPubSyst->SetFillStyle(0);
   for (int i{1}; i <= 6; ++i) {
@@ -172,12 +174,17 @@ void Systematics() {
     hPub->SetBinError(i, ey[i-1]);
     hPubSyst->SetBinError(i, sy[i-1]);
   }
+  hPub->Write("pubStat");
+  hPubSyst->Write("pubSyst");
+
 
   for (int iS{0}; iS < 2; ++iS) {
     TH1D* fStatTPC = (TH1D*)defaultTPCuncorr[iS]->Clone(Form("fStatTPC%c", kLetter[iS]));
     TH1D* fSystTPC = (TH1D*)defaultTPCuncorr[iS]->Clone(Form("fSystTPC%c", kLetter[iS]));
     TH1D* fStatTOF = (TH1D*)defaultTOFuncorr[iS]->Clone(Form("fStatTOF%c", kLetter[iS]));
     TH1D* fSystTOF = (TH1D*)defaultTOFuncorr[iS]->Clone(Form("fSystTOF%c", kLetter[iS]));
+    fStatTPC->SetTitle(";#it{p}_{T} (GeV/#it{c});#frac{1}{N_{ev}} #frac{d^{2}N}{dyd#it{p}_{T}}");
+    fSystTPC->SetTitle(";#it{p}_{T} (GeV/#it{c});#frac{1}{N_{ev}} #frac{d^{2}N}{dyd#it{p}_{T}}");
     fStatTPC->SetMarkerStyle(20);
     fSystTPC->SetMarkerStyle(20);
     fStatTOF->SetMarkerStyle(21);
