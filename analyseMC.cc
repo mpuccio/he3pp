@@ -7,19 +7,16 @@
 #include <iostream>
 #include "src/Common.h"
 
-// enum {
-//   kDeuteron = BIT(0),
-//   kTriton = BIT(1),
-//   kHe3 = BIT(2),
-//   kHe4 = BIT(3),
-//   kHasTOF = BIT(4),
-//   kIsReconstructed = BIT(5),
-//   kIsAmbiguous = BIT(6), /// just a placeholder now
-//   kPositive = BIT(7),
-//   kIsPhysicalPrimary = BIT(8), /// MC flags starting from the second half of the short
-//   kIsSecondaryFromMaterial = BIT(9),
-//   kIsSecondaryFromWeakDecay = BIT(10)
-// };
+void DivideBinomial(TH1* res, TH1* num, TH1* den) {
+  for (int i = 1; i <= res->GetNbinsX(); i++) {
+    double n = num->GetBinContent(i);
+    double d = den->GetBinContent(i);
+    double p = n / d;
+    double e = std::sqrt(p * (1 - p) / d);
+    res->SetBinContent(i, p);
+    res->SetBinError(i, e);
+  }
+}
 
 float weight(float pt)
 {
@@ -42,12 +39,13 @@ void analyseMC(std::string inputFileName = kMCtreeFilename, std::string outputFi
                   .Define("deltaPtUncorrected", "ptUncorr - fgPt")
                   .Define("deltaPt", "pt - fgPt")
                   .Define("ptWeight", "(5.04194/1.3645054) * fgPt * std::exp(-fgPt * 1.35934)")
-                  .Define("rapidity", "std::asinh(pt / std::hypot(pt, gM) * std::sinh(fEta))")
                   .Define("isHe3", "std::abs(fPDGcode) == 1000020030")
-                  .Define("isHe4", "std::abs(fPDGcode) == 1000020040"); //
+                  .Define("isHe4", "std::abs(fPDGcode) == 1000020040")
+                  .Filter("isHe3"); // Only He3
 
-  auto dfCutReco = df.Filter("nITScls > 0 && fTPCnCls > 70 && isPrimary && std::abs(fPDGcode) == 1000020030 && std::abs(fEta) < 0.9 && std::abs(rapidity) < 0.5");
-  auto dfCutGen = df.Filter("std::abs(fPDGcode) == 1000020030 && isPrimary && std::abs(yMC) < 0.5");
+  auto dfCutRecoBase = df.Filter(kBaseRecSelections + "&& isPrimary");
+  auto dfCutReco = dfCutRecoBase.Filter(kDefaultRecSelections);
+  auto dfCutGen = df.Filter("isPrimary && std::abs(yMC) < 0.5");
 
   auto hDeltaPtHe3 = dfCutReco.Histo2D({"hDeltaPtHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 100, 0, 5, 120, -0.4, 0.2}, "pt", "deltaPtUncorrected");
   auto hDeltaPtCorrHe3 = dfCutReco.Histo2D({"hDeltaPtCorrHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 100, 0, 5, 100, -0.4, 0.2}, "pt", "deltaPt");
@@ -56,17 +54,17 @@ void analyseMC(std::string inputFileName = kMCtreeFilename, std::string outputFi
   std::vector<ROOT::RDF::RResultPtr<TH2D>> hDCAxyAHe3, hDCAxyMHe3;
   std::vector<ROOT::RDF::RResultPtr<TH1D>> hRecoTPCAHe3, hRecoTPCMHe3, hRecoTOFAHe3, hRecoTOFMHe3, hGenAHe3, hGenMHe3;
   std::vector<ROOT::RDF::RResultPtr<TH1D>> hRecoTPCAHe3W, hRecoTPCMHe3W, hRecoTOFAHe3W, hRecoTOFMHe3W, hGenAHe3W, hGenMHe3W;
-  hRecoTPCAHe3.push_back(dfCutReco.Filter("!matter && fTPCnCls > 120 && nITScls >= 6 && std::abs(fDCAz) < 0.7").Histo1D({"TPCAHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt"));
-  hRecoTPCMHe3.push_back(dfCutReco.Filter("matter && fTPCnCls > 120 && nITScls >= 6 && std::abs(fDCAz) < 0.7").Histo1D({"TPCMHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt"));
-  hRecoTOFAHe3.push_back(dfCutReco.Filter("!matter && fTPCnCls > 120 && nITScls >= 6 && std::abs(fDCAz) < 0.7 && hasTOF").Histo1D({"TOFAHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt"));
-  hRecoTOFMHe3.push_back(dfCutReco.Filter("matter && fTPCnCls > 120 && nITScls >= 6 && std::abs(fDCAz) < 0.7 && hasTOF").Histo1D({"TOFMHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt"));
+  hRecoTPCAHe3.push_back(dfCutReco.Filter("!matter").Histo1D({"TPCAHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt"));
+  hRecoTPCMHe3.push_back(dfCutReco.Filter("matter").Histo1D({"TPCMHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt"));
+  hRecoTOFAHe3.push_back(dfCutReco.Filter("!matter && hasTOF").Histo1D({"TOFAHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt"));
+  hRecoTOFMHe3.push_back(dfCutReco.Filter("matter && hasTOF").Histo1D({"TOFMHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt"));
   hGenAHe3.push_back(dfCutGen.Filter("fPDGcode < 0").Histo1D({"genAHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "fgPt"));
   hGenMHe3.push_back(dfCutGen.Filter("fPDGcode > 0").Histo1D({"genMHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "fgPt"));
 
-  hRecoTPCAHe3W.push_back(dfCutReco.Filter("!matter && fTPCnCls > 120 && nITScls >= 6 && std::abs(fDCAz) < 0.7").Histo1D({"TPCAHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt", "ptWeight"));
-  hRecoTPCMHe3W.push_back(dfCutReco.Filter("matter && fTPCnCls > 120 && nITScls >= 6 && std::abs(fDCAz) < 0.7").Histo1D({"TPCMHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt", "ptWeight"));
-  hRecoTOFAHe3W.push_back(dfCutReco.Filter("!matter && fTPCnCls > 120 && nITScls >= 6 && std::abs(fDCAz) < 0.7 && hasTOF").Histo1D({"TOFAHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt", "ptWeight"));
-  hRecoTOFMHe3W.push_back(dfCutReco.Filter("matter && fTPCnCls > 120 && nITScls >= 6 && std::abs(fDCAz) < 0.7 && hasTOF").Histo1D({"TOFMHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt", "ptWeight"));
+  hRecoTPCAHe3W.push_back(dfCutReco.Filter("!matter").Histo1D({"TPCAHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt", "ptWeight"));
+  hRecoTPCMHe3W.push_back(dfCutReco.Filter("matter").Histo1D({"TPCMHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt", "ptWeight"));
+  hRecoTOFAHe3W.push_back(dfCutReco.Filter("!matter && hasTOF").Histo1D({"TOFAHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt", "ptWeight"));
+  hRecoTOFMHe3W.push_back(dfCutReco.Filter("matter && hasTOF").Histo1D({"TOFMHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt", "ptWeight"));
   hGenAHe3W.push_back(dfCutGen.Filter("fPDGcode < 0").Histo1D({"genAHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "fgPt", "ptWeight"));
   hGenMHe3W.push_back(dfCutGen.Filter("fPDGcode > 0").Histo1D({"genMHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "fgPt", "ptWeight"));
 
@@ -113,22 +111,22 @@ void analyseMC(std::string inputFileName = kMCtreeFilename, std::string outputFi
   size_t nTrials{enableTrials ? kCutNames["nsigmaDCAz"].size() * kCutNames["fTPCnCls"].size() * kCutNames["nITScls"].size() : 0};
   for (size_t iDCAz{0}; enableTrials && iDCAz < kCutNames["nsigmaDCAz"].size(); ++iDCAz)
   {
-    auto dnsigmaDCAz = dfCutReco.Filter("std::abs(nsigmaDCAz) < " + std::to_string(kCutNames["nsigmaDCAz"][iDCAz]));
+    auto dnsigmaDCAz = dfCutRecoBase.Filter("std::abs(nsigmaDCAz) < " + std::to_string(kCutNames["nsigmaDCAz"][iDCAz]));
     for (size_t iTPCcls{0}; iTPCcls < kCutNames["fTPCnCls"].size(); ++iTPCcls)
     {
       auto dfTPCcls = dnsigmaDCAz.Filter("fTPCnCls > " + std::to_string(kCutNames["fTPCnCls"][iTPCcls]));
       for (size_t iITScls{0}; iITScls < kCutNames["nITScls"].size(); ++iITScls)
       {
         auto dfITScls = dfTPCcls.Filter("nITScls >= " + std::to_string(kCutNames["nITScls"][iITScls]));
-        hRecoTPCAHe3.push_back(dfCutReco.Filter("!matter").Histo1D({Form("TPCAHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt"));
-        hRecoTPCMHe3.push_back(dfCutReco.Filter("matter").Histo1D({Form("TPCMHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt"));
-        hRecoTOFAHe3.push_back(dfCutReco.Filter("!matter && hasTOF").Histo1D({Form("TOFAHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt"));
-        hRecoTOFMHe3.push_back(dfCutReco.Filter("matter && hasTOF").Histo1D({Form("TOFMHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt"));
+        hRecoTPCAHe3.push_back(dfCutRecoBase.Filter("!matter").Histo1D({Form("TPCAHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt"));
+        hRecoTPCMHe3.push_back(dfCutRecoBase.Filter("matter").Histo1D({Form("TPCMHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt"));
+        hRecoTOFAHe3.push_back(dfCutRecoBase.Filter("!matter && hasTOF").Histo1D({Form("TOFAHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt"));
+        hRecoTOFMHe3.push_back(dfCutRecoBase.Filter("matter && hasTOF").Histo1D({Form("TOFMHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt"));
 
-        hRecoTPCAHe3W.push_back(dfCutReco.Filter("!matter").Histo1D({Form("TPCAHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt", "ptWeight"));
-        hRecoTPCMHe3W.push_back(dfCutReco.Filter("matter").Histo1D({Form("TPCMHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt", "ptWeight"));
-        hRecoTOFAHe3W.push_back(dfCutReco.Filter("!matter && hasTOF").Histo1D({Form("TOFAHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt", "ptWeight"));
-        hRecoTOFMHe3W.push_back(dfCutReco.Filter("matter && hasTOF").Histo1D({Form("TOFMHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt", "ptWeight"));
+        hRecoTPCAHe3W.push_back(dfCutRecoBase.Filter("!matter").Histo1D({Form("TPCAHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt", "ptWeight"));
+        hRecoTPCMHe3W.push_back(dfCutRecoBase.Filter("matter").Histo1D({Form("TPCMHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt", "ptWeight"));
+        hRecoTOFAHe3W.push_back(dfCutRecoBase.Filter("!matter && hasTOF").Histo1D({Form("TOFAHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt", "ptWeight"));
+        hRecoTOFMHe3W.push_back(dfCutRecoBase.Filter("matter && hasTOF").Histo1D({Form("TOFMHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", kNPtBins, kPtBins}, "pt", "ptWeight"));
         iTrial++;
       }
     }
@@ -155,10 +153,14 @@ void analyseMC(std::string inputFileName = kMCtreeFilename, std::string outputFi
   auto effTPCM = (TH1 *)hRecoTPCMHe3[0]->Clone(Form("effTPCM"));
   auto effTOFA = (TH1 *)hRecoTOFAHe3[0]->Clone(Form("effTOFA"));
   auto effTOFM = (TH1 *)hRecoTOFMHe3[0]->Clone(Form("effTOFM"));
-  effTPCA->Divide(hGenAHe3[0].GetPtr());
-  effTPCM->Divide(hGenMHe3[0].GetPtr());
-  effTOFA->Divide(hGenAHe3[0].GetPtr());
-  effTOFM->Divide(hGenMHe3[0].GetPtr());
+  effTPCA->Divide(hRecoTPCAHe3[0].GetPtr(), hGenAHe3[0].GetPtr(), 1., 1., "B");
+  effTPCM->Divide(hRecoTPCMHe3[0].GetPtr(), hGenMHe3[0].GetPtr(), 1., 1., "B");
+  effTOFA->Divide(hRecoTOFAHe3[0].GetPtr(), hGenAHe3[0].GetPtr(), 1., 1., "B");
+  effTOFM->Divide(hRecoTOFMHe3[0].GetPtr(), hGenMHe3[0].GetPtr(), 1., 1., "B");
+  effTPCA->GetYaxis()->SetTitle("Efficiency #times Acceptance");
+  effTPCM->GetYaxis()->SetTitle("Efficiency #times Acceptance");
+  effTOFA->GetYaxis()->SetTitle("Efficiency #times Acceptance");
+  effTOFM->GetYaxis()->SetTitle("Efficiency #times Acceptance");
   effTPCA->Write("effTPCA");
   effTPCM->Write("effTPCM");
   effTOFA->Write("effTOFA");
@@ -168,10 +170,14 @@ void analyseMC(std::string inputFileName = kMCtreeFilename, std::string outputFi
   auto effWTPCM = (TH1 *)hRecoTPCMHe3W[0]->Clone(Form("effWTPCM"));
   auto effWTOFA = (TH1 *)hRecoTOFAHe3W[0]->Clone(Form("effWTOFA"));
   auto effWTOFM = (TH1 *)hRecoTOFMHe3W[0]->Clone(Form("effWTOFM"));
-  effWTPCA->Divide(hGenAHe3W[0].GetPtr());
-  effWTPCM->Divide(hGenMHe3W[0].GetPtr());
-  effWTOFA->Divide(hGenAHe3W[0].GetPtr());
-  effWTOFM->Divide(hGenMHe3W[0].GetPtr());
+  effWTPCA->Divide(hRecoTPCAHe3W[0].GetPtr(), hGenAHe3W[0].GetPtr(), 1., 1., "B");
+  effWTPCM->Divide(hRecoTPCMHe3W[0].GetPtr(), hGenMHe3W[0].GetPtr(), 1., 1., "B");
+  effWTOFA->Divide(hRecoTOFAHe3W[0].GetPtr(), hGenAHe3W[0].GetPtr(), 1., 1., "B");
+  effWTOFM->Divide(hRecoTOFMHe3W[0].GetPtr(), hGenMHe3W[0].GetPtr(), 1., 1., "B");
+  effWTPCA->GetYaxis()->SetTitle("Efficiency #times Acceptance");
+  effWTPCM->GetYaxis()->SetTitle("Efficiency #times Acceptance");
+  effWTOFA->GetYaxis()->SetTitle("Efficiency #times Acceptance");
+  effWTOFM->GetYaxis()->SetTitle("Efficiency #times Acceptance");
   effWTPCA->Write("effWTPCA");
   effWTPCM->Write("effWTPCM");
   effWTOFA->Write("effWTOFA");

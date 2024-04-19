@@ -37,7 +37,10 @@ void analyseMCHe4(std::string inputFileName = kMCtreeFilename, std::string outpu
   auto dfCutReco = df.Filter("nITScls > 4 && fTPCnCls > 110 && std::abs(fEta) < 0.9 && std::abs(rapidity) < 0.5");
   auto dfCutGen = df.Filter("std::abs(yMC) < 0.5");
 
-  auto hDeltaPtHe4 = dfCutReco.Histo2D({"hDeltaPtHe4", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 100, 0, 5, 120, -0.4, 0.2}, "pt", "deltaPtUncorrected");
+  auto hInjection = df.Histo2D({"hInjection", ";#it{p}_{T} (GeV/#it{c});y", 200, 0, 10, 150, -1.5, 1.5}, "fgPt", "yMC");
+
+  auto hPIDinTracking = dfCutReco.Histo2D({"hPIDinTracking", ";#it{p}_{T}^{rec} (GeV/#it{c});PID for tracking;", 100, 0, 5, 9, -0.5, 8.5}, "ptUncorr", "pidForTracking");
+  auto hDeltaPtHe4 = dfCutReco.Histo2D({"hDeltaPtHe4", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 100, 0, 5, 120, -0.4, 0.2}, "ptUncorr", "deltaPtUncorrected");
   auto hDeltaPtCorrHe4 = dfCutReco.Histo2D({"hDeltaPtCorrHe4", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 100, 0, 5, 100, -0.4, 0.2}, "pt", "deltaPt");
   auto hMomResHe4 = dfCutReco.Histo2D({"hMomResHe4", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 44, 0.9, 5.3, 80, -0.2, 0.2}, "pt", "deltaPt");
 
@@ -62,11 +65,21 @@ void analyseMCHe4(std::string inputFileName = kMCtreeFilename, std::string outpu
   hDeltaPtHe4->DrawClone("col");
   auto hDeltaPtHe4prof = hDeltaPtHe4->ProfileX();
   hDeltaPtHe4prof->SetLineColor(kRed);
-  hDeltaPtHe4prof->DrawClone("same");
   TF1 f("f", "[0] + [2] * TMath::Exp([1] * x)", 0, 5);
   f.SetParameters(-0.0419608, -1.4019, -1.75861);
-  hDeltaPtHe4prof->Fit(&f, "NR", "", 1, 5);
+  hDeltaPtHe4prof->Fit(&f, "NR", "", 1.1, 4.5);
+  // f.SetParameters(-0.0419608, -1.4019, -1.75861);
+  hDeltaPtHe4prof->DrawClone("same");
   f.DrawClone("same");
+
+  TCanvas* cPIDinTracking = new TCanvas("hPIDinTracking", "hPIDinTracking");
+  cPIDinTracking->SetLogz();
+  cPIDinTracking->SetRightMargin(0.1);
+  hPIDinTracking->DrawClone("colz");
+
+  TCanvas* cInjection = new TCanvas("cInjection", "cInjection");
+  cInjection->SetRightMargin(0.1);
+  hInjection->DrawClone("colz");
 
   new TCanvas("hDeltaPtCorrHe4", "hDeltaPtCorrHe4");
   hDeltaPtCorrHe4->DrawClone("col");

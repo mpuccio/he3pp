@@ -22,10 +22,11 @@ const char   kLetter[2] = {'M','A'}; // M -> Matter, A -> Anti-matter
 const string kNames[2] = {"he3","antihe3"};
 const string kLabels[2] = {"^{3}He","^{3}#bar{He}"};
 
+// const string kMCproduction = "LHC24b2";
 const string kMCproduction = "LHC23j6b";
 const string kRecoPass = "apass4";
 const string kPeriod = "LHC22";
-const string kVariant = "_alpha";
+const string kVariant = "giovanni";
 
 const string kBaseOutputDir = "$NUCLEI_OUTPUT/" + kPeriod + "/" + kRecoPass + "/";
 const string kBaseInputDir = "$NUCLEI_INPUT/";
@@ -40,11 +41,17 @@ const string kMCfilenameHe4 = kBaseInputDir + "MC/" + kMCproduction + "/MChistos
 
 const string kFilterListNames = "nuclei";
 
+const string kBaseRecSelections = "fTPCnCls >= 110 && nITScls >= 5 && std::abs(fEta) < 0.9 && std::abs(fDCAxy) < 0.7 && pt > 0.8 && pt < 9.0";
+const string kDefaultRecSelections = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) < 7 && std::abs(fDCAxy) < 0.2";
+
 const string kSignalOutput = kBaseOutputDir + "signal" + kVariant + ".root";
 const string kSystematicsOutput = kBaseOutputDir + "systematics" + kVariant + ".root";
 
-constexpr int    kNPtBins = 4;
-constexpr double  kPtBins[kNPtBins+1] = {0.5,1.5,2.0,2.5,3.0};
+// constexpr int    kNPtBins = 11;
+// constexpr double  kPtBins[kNPtBins+1] = {1.0, 1.2, 1.4, 1.8, 2.2, 2.6, 3.2,4.0,4.8,5.8,7,9};
+
+constexpr int    kNPtBins = 12;
+constexpr double  kPtBins[kNPtBins+1] = {1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0};
 
 const int    kCentLength = 1;
 const int    kCentBinsArray[kCentLength][2] = {{2,2}};
@@ -122,6 +129,8 @@ auto defineColumnsForData(ROOT::RDataFrame& d) {
           .Define("isSecondaryFromWeakDecay", "fFlags & (1 << 11)")
           .Define("deltaMassHe3", "tofMass - 2.80839")
           .Define("deltaMassHe4", "tofMass - 3.72738")
+          .Define("yHe3", "std::asinh(pt / std::hypot(pt, 2.80839) * std::sinh(fEta))")
+          .Define("yHe4", "std::asinh(pt / std::hypot(pt, 3.72738) * std::sinh(fEta))")
           .Define("hasGoodTOFmassHe3", "!hasTOF || std::abs(deltaMassHe3) < 0.6")
           .Define("hasGoodTOFmassHe4", "!hasTOF || std::abs(deltaMassHe4) < 0.3")
           .Define("nsigmaDCAxy", nSigmaDCAxy, {"pt", "fDCAxy"})

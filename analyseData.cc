@@ -13,8 +13,8 @@ void analyseData(std::string inputFileName = kDataTreeFilename, std::string outp
   gStyle->SetOptStat(0);
   ROOT::EnableImplicitMT();
   ROOT::RDataFrame d("O2nucleitable", inputFileName);
-  auto dfBase = defineColumnsForData(d).Filter("fTPCnCls >= 110 && nITScls >= 5 && abs(fEta) < 0.9 && std::abs(fDCAxy) < 0.7 && pt > 0.8 && pt < 9.0");
-  auto dfPrimary = dfBase.Filter("fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) < 7 && std::abs(fDCAxy) < 0.2");
+  auto dfBase = defineColumnsForData(d).Filter(kBaseRecSelections.data());
+  auto dfPrimary = dfBase.Filter(kDefaultRecSelections.data());
   auto dfSecondary = dfBase.Filter("fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) > 7 && std::abs(fDCAxy) < 0.2");
 
   if (skim)
@@ -100,7 +100,7 @@ void analyseData(std::string inputFileName = kDataTreeFilename, std::string outp
   hDCAxySecondaryMHe3[0]->Write();
   hDCAxySecondaryAHe3[0]->Write();
 
-  for (size_t iT{0}; iT < iTrial; ++iT)
+  for (int iT{0}; iT < iTrial; ++iT)
   {
     auto dir = outputFile.mkdir(Form("nuclei%i", iT));
     dir->cd();
