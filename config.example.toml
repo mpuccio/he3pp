@@ -45,11 +45,14 @@ enable_trials = true
 skim = false
 draw = false
 is_mc = true                # only used for merge_trees
+log_level = "INFO"          # DEBUG | INFO | WARNING | ERROR
 
 [paths]
 # Generic input/output used by merge_trees, analyse_data, analyse_mc, signal, systematics, checkpoint
 input = "$NUCLEI_INPUT/data/LHC22/apass4/MergedAO2D.root"
 output = "$NUCLEI_INPUT/data/LHC22/apass4/DataHistosgiovanni.root"
+log_file = ""
+metadata_output = "run_metadata.json"
 
 # Full-chain and stage-specific paths
 data_tree = "$NUCLEI_INPUT/data/LHC22/apass4/MergedAO2D.root"

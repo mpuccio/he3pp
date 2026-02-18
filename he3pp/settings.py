@@ -39,6 +39,8 @@ TOF_MIN_PT = 1.0
 PT_RANGE = [1.4, 7.0]
 NTPC_FUNCTIONS = 3
 TPC_FUNCTION_NAMES = ["GausGaus", "ExpGaus", "ExpTailGaus", "LognormalLognormal"]
+# Weighted efficiency histograms are intentionally named "Weff*".
+WEIGHTED_EFF_NAMING_POLICY = "prefix_W"
 
 CUT_NAMES = {
     "nsigmaDCAz": [6.0, 7.0, 8.0],

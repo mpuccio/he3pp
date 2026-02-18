@@ -43,8 +43,16 @@ Using real inputs under `/Users/mpuccio/alice/run3/nuclei-analysis`:
 
 - Data output matches reference exactly.
 - MC output matches in content (up to floating precision), with differences in:
-  - weighted-efficiency naming convention (`Weff*` vs `effW*`),
+  - weighted-efficiency naming convention (Python standard: `Weff*`),
   - uncertainty treatment in efficiencies (Python uses binomial errors where configured).
+
+## New quality-of-life additions
+
+- Task-level logging via `[run].log_level` and optional `[paths].log_file`.
+- Run metadata JSON output via `[paths].metadata_output`.
+- Automated smoke comparator: `scripts/validate_smoke.py`.
+- Automated smoke runner: `scripts/run_smoke_checks.sh`.
+- O2/ROOT environment helper: `scripts/env_o2.sh`.
 
 ## Environment notes (macOS/O2)
 

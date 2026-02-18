@@ -1,0 +1,10 @@
+[run]
+task = "analyse_data"
+particle = "he3"
+enable_mt = true
+draw = false
+
+[paths]
+input = "$NUCLEI_INPUT/data/LHC22/apass4/MergedAO2D.root"
+output = "/tmp/he3pp_validation/DataHistosgiovanni_py.root"
+metadata_output = "/tmp/he3pp_validation/data_run_metadata.json"

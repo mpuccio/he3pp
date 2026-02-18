@@ -1,5 +1,6 @@
 from array import array
 from datetime import datetime
+import logging
 from typing import Any
 
 import ROOT
@@ -7,7 +8,16 @@ import ROOT
 from .settings import *  # Loaded after runtime overrides in cli.run
 from .root_io import define_columns_for_data, ensure_parent, expand, h1_model, h2_model, load_fit_modules, ptr, write_hist
 
+LOGGER = logging.getLogger("he3pp.tasks")
+
+
+def _weighted_eff_name(base: str) -> str:
+    # Weighted efficiencies intentionally use "Weff*" naming.
+    return f"W{base}"
+
+
 def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = False, draw: bool = False) -> None:
+    LOGGER.info("analyse_data start particle=%s input=%s output=%s", particle, input_file, output_file)
     ROOT.gStyle.SetOptStat(0)
     rdf = ROOT.RDataFrame("O2nucleitable", expand(input_file))
     df_base = define_columns_for_data(rdf)
@@ -103,9 +113,11 @@ def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = 
         write_hist(h_dca_z_a[idx + 1], "hDCAzAHe3")
         write_hist(h_dca_z_m[idx + 1], "hDCAzMHe3")
     out.Close()
+    LOGGER.info("analyse_data done output=%s", output_file)
 
 
 def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: bool, draw: bool = False) -> None:
+    LOGGER.info("analyse_mc start particle=%s input=%s output=%s", particle, input_file, output_file)
     ROOT.gStyle.SetOptStat(0)
     rdf = ROOT.RDataFrame("O2nucleitablemc", expand(input_file))
     df_data = define_columns_for_data(rdf)
@@ -245,7 +257,7 @@ def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: 
         return eff_tpc_a, eff_tpc_m
 
     write_eff("", h_reco_tpc_a[0], h_reco_tpc_m[0], h_reco_tof_a[0], h_reco_tof_m[0], h_gen_a[0], h_gen_m[0])
-    write_eff("W", h_reco_tpc_a_w[0], h_reco_tpc_m_w[0], h_reco_tof_a_w[0], h_reco_tof_m_w[0], h_gen_a_w[0], h_gen_m_w[0])
+    write_eff(_weighted_eff_name(""), h_reco_tpc_a_w[0], h_reco_tpc_m_w[0], h_reco_tof_a_w[0], h_reco_tof_m_w[0], h_gen_a_w[0], h_gen_m_w[0])
 
     for i in range(n_trials):
         dtrial = out.mkdir(f"nuclei{i}")
@@ -272,7 +284,7 @@ def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: 
         matching_tof_a.Write()
         matching_tof_m.Write()
 
-        eff_w_tpc_a, eff_w_tpc_m = write_eff("W", h_reco_tpc_a_w[i + 1], h_reco_tpc_m_w[i + 1], h_reco_tof_a_w[i + 1], h_reco_tof_m_w[i + 1], h_gen_a_w[0], h_gen_m_w[0])
+        eff_w_tpc_a, eff_w_tpc_m = write_eff(_weighted_eff_name(""), h_reco_tpc_a_w[i + 1], h_reco_tpc_m_w[i + 1], h_reco_tof_a_w[i + 1], h_reco_tof_m_w[i + 1], h_gen_a_w[0], h_gen_m_w[0])
         matching_w_tof_a = h_reco_tof_a_w[i + 1].GetValue().Clone(f"matchingWTOFA{i}")
         matching_w_tof_m = h_reco_tof_m_w[i + 1].GetValue().Clone(f"matchingWTOFM{i}")
         matching_w_tof_a.Divide(eff_w_tpc_a)
@@ -281,9 +293,11 @@ def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: 
         matching_w_tof_m.Write()
 
     out.Close()
+    LOGGER.info("analyse_mc done output=%s", output_file)
 
 
 def signal(input_file: str, output_file: str) -> None:
+    LOGGER.info("signal start input=%s output=%s", input_file, output_file)
     load_fit_modules()
     ROOT.RooMsgService.instance().setGlobalKillBelow(ROOT.RooFit.ERROR)
     ROOT.RooMsgService.instance().setSilentMode(True)
@@ -525,9 +539,11 @@ def signal(input_file: str, output_file: str) -> None:
             h_chi_tpc[i_s][i_c].Write()
 
     out_file.Close()
+    LOGGER.info("signal done output=%s", output_file)
 
 
 def systematics(signal_file: str, mc_file: str, data_analysis_results: str, output_file: str) -> None:
+    LOGGER.info("systematics start signal=%s mc=%s output=%s", signal_file, mc_file, output_file)
     f_data = ROOT.TFile(expand(signal_file))
     f_mc = ROOT.TFile(expand(mc_file))
     an_results = ROOT.TFile(expand(data_analysis_results))
@@ -687,9 +703,11 @@ def systematics(signal_file: str, mc_file: str, data_analysis_results: str, outp
         f_syst_tof.Write()
 
     out.Close()
+    LOGGER.info("systematics done output=%s", output_file)
 
 
 def checkpoint(systematics_file: str, data_ar_file: str, mc_file: str, mc_ar_file: str, signal_file: str, output_file: str | None = None) -> None:
+    LOGGER.info("checkpoint start output=%s", output_file if output_file else "auto")
     syst = ROOT.TFile(expand(systematics_file))
     data_ar = ROOT.TFile(expand(data_ar_file))
     mc = ROOT.TFile(expand(mc_file))
@@ -727,9 +745,11 @@ def checkpoint(systematics_file: str, data_ar_file: str, mc_file: str, mc_ar_fil
     sig.Get("nuclei/antihe3/GausExp/hRawCountsA0").Clone("tof_rawcounts").Write()
 
     out.Close()
+    LOGGER.info("checkpoint done output=%s", output_file if output_file else "auto")
 
 
 def merge_trees(input_file: str, output_file: str, is_mc: bool = True) -> None:
+    LOGGER.info("merge_trees start input=%s output=%s is_mc=%s", input_file, output_file, is_mc)
     in_f = ROOT.TFile(expand(input_file))
     keys = ROOT.gDirectory.GetListOfKeys()
     out_list = ROOT.TList()
@@ -753,5 +773,5 @@ def merge_trees(input_file: str, output_file: str, is_mc: bool = True) -> None:
     new_tree.SetName(tree_name)
     new_tree.Write()
     out_f.Close()
-
+    LOGGER.info("merge_trees done output=%s", output_file)
 

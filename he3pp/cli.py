@@ -1,10 +1,47 @@
 import argparse
+import copy
+from datetime import datetime, timezone
+import json
+import logging
+import subprocess
 import sys
+import time
 import tomllib
 
 import ROOT
 
 from . import settings as s
+
+
+LOGGER = logging.getLogger("he3pp")
+
+
+def _setup_logging(level: str = "INFO", log_file: str | None = None) -> None:
+    lvl = getattr(logging, level.upper(), logging.INFO)
+    logging.basicConfig(
+        level=lvl,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        handlers=[logging.StreamHandler(sys.stdout)] + ([logging.FileHandler(log_file)] if log_file else []),
+        force=True,
+    )
+
+
+def _git_revision() -> str:
+    try:
+        out = subprocess.run(["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True)
+        return out.stdout.strip()
+    except Exception:
+        return "unknown"
+
+
+def _write_metadata(path: str, payload: dict) -> None:
+    from .root_io import ensure_parent, expand
+
+    out = expand(path)
+    ensure_parent(out)
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, sort_keys=True)
 
 
 def default_config() -> dict:
@@ -56,6 +93,7 @@ def default_config() -> dict:
             "skim": False,
             "draw": False,
             "is_mc": True,
+            "log_level": "INFO",
         },
         "paths": {
             "input": s.DATA_TREE_FILENAME,
@@ -68,15 +106,21 @@ def default_config() -> dict:
             "systematics_output": s.SYSTEMATICS_OUTPUT,
             "data_analysis_results": s.DATA_ANALYSIS_RESULTS,
             "mc_analysis_results": s.MC_ANALYSIS_RESULTS,
+            "metadata_output": "run_metadata.json",
+            "log_file": "",
         },
     }
 
 
 def run(cfg: dict) -> None:
+    run_cfg = cfg.get("run", {})
+    path_cfg_for_log = cfg.get("paths", {})
+    _setup_logging(str(run_cfg.get("log_level", "INFO")), str(path_cfg_for_log.get("log_file", "") or ""))
+    LOGGER.info("Starting run task=%s particle=%s", run_cfg.get("task", "analyse_data"), run_cfg.get("particle", "he3"))
+
     s.apply_runtime_overrides(cfg)
     from . import tasks  # lazy import so tasks bind runtime-overridden settings
 
-    run_cfg = cfg.get("run", {})
     path_cfg = dict(default_config()["paths"])
     path_cfg.update(cfg.get("paths", {}))
 
@@ -92,6 +136,7 @@ def run(cfg: dict) -> None:
         else:
             ROOT.EnableImplicitMT()
 
+    t0 = time.time()
     if task == "merge_trees":
         tasks.merge_trees(path_cfg.get("input", s.MC_TREE_FILENAME), path_cfg.get("output", "MergedAO2D.root"), bool(run_cfg.get("is_mc", True)))
     elif task == "analyse_data":
@@ -140,6 +185,7 @@ def run(cfg: dict) -> None:
         )
     else:
         raise ValueError(f"Unsupported task: {task}")
+    LOGGER.info("Finished run task=%s elapsed_sec=%.2f", task, time.time() - t0)
 
 
 def main() -> int:
@@ -161,7 +207,30 @@ def main() -> int:
         merged.setdefault(section, {})
         merged[section].update(cfg.get(section, {}))
 
-    run(merged)
+    started = datetime.now(timezone.utc)
+    status = "success"
+    error = ""
+    try:
+        run(merged)
+    except Exception as exc:
+        status = "failed"
+        error = str(exc)
+        raise
+    finally:
+        ended = datetime.now(timezone.utc)
+        metadata = {
+            "status": status,
+            "error": error,
+            "started_utc": started.isoformat(),
+            "ended_utc": ended.isoformat(),
+            "duration_sec": (ended - started).total_seconds(),
+            "git_revision": _git_revision(),
+            "config": copy.deepcopy(merged),
+        }
+        try:
+            _write_metadata(merged.get("paths", {}).get("metadata_output", "run_metadata.json"), metadata)
+        except Exception as meta_exc:
+            LOGGER.error("Failed to write metadata: %s", meta_exc)
     return 0
 
 

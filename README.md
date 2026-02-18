@@ -15,7 +15,13 @@ Legacy C++ macro entrypoints have been removed.
 
 ## Environment setup
 
-Use O2 in the current shell and export ROOT runtime paths:
+Use the helper script (recommended):
+
+```bash
+source scripts/env_o2.sh
+```
+
+Or manually load O2 in the current shell and export ROOT runtime paths:
 
 ```bash
 eval "$(alienv load O2/latest)"
@@ -50,6 +56,12 @@ python3 he3_cli.py --config config.example.toml --dump-default-config
 - `[run]`: task + runtime flags
 - `[paths]`: all input/output paths
 
+Logging and metadata:
+
+- `[run].log_level`: `DEBUG|INFO|WARNING|ERROR`
+- `[paths].log_file`: optional log file path
+- `[paths].metadata_output`: JSON metadata output for each run
+
 ## Tasks
 
 Supported tasks:
@@ -60,3 +72,32 @@ Supported tasks:
 
 - Uses **PyROOT only** (no uproot/pandas).
 - `signal` still uses `src/` RooFit C++ components loaded by PyROOT.
+- Weighted efficiency histograms follow the Python naming policy `Weff*`.
+
+## Smoke validation
+
+Data smoke:
+
+```bash
+python3 he3_cli.py --config tests/smoke/validate_data.toml
+python3 scripts/validate_smoke.py \
+  --reference "$NUCLEI_INPUT/data/LHC22/apass4/DataHistosgiovanni.root" \
+  --candidate /tmp/he3pp_validation/DataHistosgiovanni_py.root
+```
+
+MC smoke (content-only + naming normalization):
+
+```bash
+python3 he3_cli.py --config tests/smoke/validate_mc.toml
+python3 scripts/validate_smoke.py \
+  --reference "$NUCLEI_INPUT/MC/LHC23j6b/MChistosgiovanni.root" \
+  --candidate /tmp/he3pp_validation/MChistosgiovanni_py.root \
+  --normalize-weff \
+  --ignore-errors
+```
+
+One-command smoke run:
+
+```bash
+scripts/run_smoke_checks.sh
+```
