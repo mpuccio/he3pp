@@ -1,0 +1,70 @@
+[common]
+period = "LHC22"
+reco_pass = "apass4"
+mc_production = "LHC23j6b"
+variant = "giovanni"
+base_input_dir = "$NUCLEI_INPUT/"
+base_output_root = "$NUCLEI_OUTPUT/"
+filter_list_name = "nuclei"
+pt_bins = [1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0]
+cent_pt_limits = [7.0]
+tpc_max_pt = 7.0
+tof_min_pt = 1.0
+pt_range = [1.4, 7.0]
+tpc_function_names = ["GausGaus", "ExpGaus", "ExpTailGaus", "LognormalLognormal"]
+
+[selections]
+base_rec = "fTPCnCls >= 110 && nITScls >= 5 && std::abs(fEta) < 0.9 && std::abs(fDCAxy) < 0.7 && pt > 0.8 && pt < 9.0"
+default_rec = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) < 7 && std::abs(fDCAxy) < 0.2"
+he4_base_rec = "fTPCnCls >= 110 && nITScls >= 5 && abs(fEta) < 0.9 && std::abs(fDCAxy) < 0.7 && ptHe4 > 0.5 && ptHe4 < 9.0"
+he4_primary_rec = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) < 7 && std::abs(fDCAxy) < 0.2"
+secondary_rec = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) > 7 && std::abs(fDCAxy) < 0.2"
+he3_trial_dca = "std::abs(fDCAxy) < 0.2"
+he3_nsigma_tof = 3.5
+he4_nsigma_tof = 3.0
+skim_template = "std::abs(nsigmaDCAz) < 8 && std::abs(fDCAxy) < 0.2 && std::abs({nsigma}) < 5"
+he3_mc_reco_append = "&& isPrimary"
+he3_mc_gen = "isPrimary && std::abs(yMC) < 0.5"
+he4_mc_pid = "isHe4 && isPrimary"
+he4_mc_reco = "nITScls > 4 && fTPCnCls > 110 && std::abs(fEta) < 0.9 && std::abs(rapidity) < 0.5"
+he4_mc_gen = "std::abs(yMC) < 0.5"
+he4_mc_signal_tracking = "fTPCnCls > 120 && nITScls >= 6 && std::abs(fDCAz) < 0.7"
+
+[cuts]
+nsigmaDCAz = [6.0, 7.0, 8.0]
+fTPCnCls = [110.0, 120.0, 130.0]
+nITScls = [5.0, 6.0, 7.0]
+nsigmaTPC = [3.0, 4.0, 5.0]
+
+[run]
+task = "analyse_data"      # merge_trees | analyse_data | analyse_mc | signal | systematics | checkpoint | full_chain
+particle = "he3"           # he3 | he4
+enable_mt = true
+nthreads = 0                # 0 -> ROOT default
+enable_trials = true
+skim = false
+draw = false
+is_mc = true                # only used for merge_trees
+
+[paths]
+# Generic input/output used by merge_trees, analyse_data, analyse_mc, signal, systematics, checkpoint
+input = "$NUCLEI_INPUT/data/LHC22/apass4/MergedAO2D.root"
+output = "$NUCLEI_INPUT/data/LHC22/apass4/DataHistosgiovanni.root"
+
+# Full-chain and stage-specific paths
+data_tree = "$NUCLEI_INPUT/data/LHC22/apass4/MergedAO2D.root"
+data_output = "$NUCLEI_INPUT/data/LHC22/apass4/DataHistosgiovanni.root"
+mc_tree = "$NUCLEI_INPUT/MC/LHC23j6b/MergedAO2D.root"
+mc_output = "$NUCLEI_INPUT/MC/LHC23j6b/MChistosgiovanni.root"
+
+signal_output = "$NUCLEI_OUTPUT/LHC22/apass4/signalgiovanni.root"
+systematics_output = "$NUCLEI_OUTPUT/LHC22/apass4/systematicsgiovanni.root"
+checkpoint_output = "checkpoint.root"
+
+data_analysis_results = "$NUCLEI_INPUT/data/LHC22/apass4/AnalysisResults.root"
+mc_analysis_results = "$NUCLEI_INPUT/MC/LHC23j6b/AnalysisResults.root"
+
+# Optional aliases used by systematics/checkpoint tasks
+signal_input = "$NUCLEI_OUTPUT/LHC22/apass4/signalgiovanni.root"
+mc_input = "$NUCLEI_INPUT/MC/LHC23j6b/MChistosgiovanni.root"
+systematics_input = "$NUCLEI_OUTPUT/LHC22/apass4/systematicsgiovanni.root"
