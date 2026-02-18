@@ -8,6 +8,7 @@ using namespace utils;
 #include <TLegend.h>
 
 #include <RooArgList.h>
+#include <RooAbsArg.h>
 #include <RooArgSet.h>
 #include <RooCBShape.h>
 #include <RooChebychev.h>
@@ -46,22 +47,22 @@ RooPlot* FitModule::FitData(TH1* dat,TString name, TString title, TString range,
 void FitModule::UseBackground(bool useBkg){
   mBkgCounts->setConstant(!useBkg);
   mBkgCounts->setVal(1000 * int(useBkg));
-  auto iter = mBackground->getVariables()->createIterator();
-  RooRealVar* var = (RooRealVar*)iter->Next();
-  while(var){
-    var->setConstant(!useBkg);
-    var = (RooRealVar*)iter->Next();
+  RooArgSet* vars = mBackground->getVariables();
+  if (!vars) return;
+  for (RooAbsArg* arg : *vars) {
+    auto* var = dynamic_cast<RooRealVar*>(arg);
+    if (var) var->setConstant(!useBkg);
   }
 }
 
 void FitModule::UseSignal(bool useSig){
   mSigCounts->setConstant(!useSig);
   mSigCounts->setVal(1000 * int(useSig));
-  auto iter = mSignal->getVariables()->createIterator();
-  RooRealVar* var = (RooRealVar*)iter->Next();
-  while(var){
-    var->setConstant(!useSig);
-    var = (RooRealVar*)iter->Next();
+  RooArgSet* vars = mSignal->getVariables();
+  if (!vars) return;
+  for (RooAbsArg* arg : *vars) {
+    auto* var = dynamic_cast<RooRealVar*>(arg);
+    if (var) var->setConstant(!useSig);
   }
 }
 

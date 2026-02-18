@@ -137,6 +137,9 @@ def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: 
         )
         df_cut_reco = df.Filter(HE4_MC_RECO_SELECTION)
         df_cut_gen = df.Filter(HE4_MC_GEN_SELECTION)
+        h_delta_pt = df_cut_reco.Histo2D(ROOT.RDF.TH2DModel("hDeltaPtHe4", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 100, 0, 5, 120, -0.4, 0.2), "ptUncorr", "deltaPtUncorrected")
+        h_delta_pt_corr = df_cut_reco.Histo2D(ROOT.RDF.TH2DModel("hDeltaPtCorrHe4", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 100, 0, 5, 100, -0.4, 0.2), "pt", "deltaPt")
+        h_mom_res = df_cut_reco.Histo2D(ROOT.RDF.TH2DModel("hMomResHe4", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 44, 0.9, 5.3, 80, -0.2, 0.2), "pt", "deltaPt")
 
         h_reco_tpc_a = [df_cut_reco.Filter(f"!matter && {HE4_MC_SIGNAL_TRACKING}").Histo1D(h1_model("TPCAHe4", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
         h_reco_tpc_m = [df_cut_reco.Filter(f"matter && {HE4_MC_SIGNAL_TRACKING}").Histo1D(h1_model("TPCMHe4", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
@@ -170,6 +173,9 @@ def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: 
         df_cut_reco_base = df.Filter(BASE_REC_SELECTIONS + HE3_MC_RECO_APPEND)
         df_cut_reco = df_cut_reco_base.Filter(DEFAULT_REC_SELECTIONS)
         df_cut_gen = df.Filter(HE3_MC_GEN_SELECTION)
+        h_delta_pt = df_cut_reco.Histo2D(ROOT.RDF.TH2DModel("hDeltaPtHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 100, 0, 5, 120, -0.4, 0.2), "pt", "deltaPtUncorrected")
+        h_delta_pt_corr = df_cut_reco.Histo2D(ROOT.RDF.TH2DModel("hDeltaPtCorrHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 100, 0, 5, 100, -0.4, 0.2), "pt", "deltaPt")
+        h_mom_res = df_cut_reco.Histo2D(ROOT.RDF.TH2DModel("hMomResHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 44, 0.9, 5.3, 80, -0.2, 0.2), "pt", "deltaPt")
 
         h_reco_tpc_a = [df_cut_reco.Filter("!matter").Histo1D(h1_model("TPCAHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
         h_reco_tpc_m = [df_cut_reco.Filter("matter").Histo1D(h1_model("TPCMHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
@@ -231,6 +237,9 @@ def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: 
     write_hist(h_reco_tpc_m[0], f"TPCM{tpc_name}")
     write_hist(h_reco_tof_a[0], f"TOFA{tpc_name}")
     write_hist(h_reco_tof_m[0], f"TOFM{tpc_name}")
+    write_hist(h_delta_pt, f"hDeltaPt{tpc_name}")
+    write_hist(h_delta_pt_corr, f"hDeltaPtCorr{tpc_name}")
+    write_hist(h_mom_res, f"hMomRes{tpc_name}")
 
     write_hist(h_gen_a_w[0], f"genA{gen_name}W")
     write_hist(h_gen_m_w[0], f"genM{gen_name}W")
@@ -774,4 +783,3 @@ def merge_trees(input_file: str, output_file: str, is_mc: bool = True) -> None:
     new_tree.Write()
     out_f.Close()
     LOGGER.info("merge_trees done output=%s", output_file)
-

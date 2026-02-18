@@ -37,7 +37,7 @@ nITScls = [5.0, 6.0, 7.0]
 nsigmaTPC = [3.0, 4.0, 5.0]
 
 [run]
-task = "analyse_data"      # merge_trees | analyse_data | analyse_mc | signal | systematics | checkpoint | full_chain
+task = "analyse_data"      # merge_trees | analyse_data | analyse_mc | signal | systematics | checkpoint | report | full_chain
 particle = "he3"           # he3 | he4
 enable_mt = true
 nthreads = 0                # 0 -> ROOT default
@@ -46,28 +46,42 @@ skim = false
 draw = false
 is_mc = true                # only used for merge_trees
 log_level = "INFO"          # DEBUG | INFO | WARNING | ERROR
+report_species = "antihe3"  # antihe3 | he3
+
+[report]
+# Section order and visibility for task=report/full_chain report generation.
+sections = ["signal_tof", "signal_tpc", "raw_spectrum", "efficiency", "pt_resolution", "corrected_spectrum"]
+# Number of free fit parameters used when estimating NDF for chi2/ndf.
+fit_n_parameters = 6
+# Pearson test threshold (fit is KO if p-value < fit_alpha).
+fit_alpha = 0.05
+# Tail mode for p-value: single | two
+fit_tail = "single"
+# TPC-only signal model shown in report and used in summary table.
+tpc_signal_model = "ExpGaus"
 
 [paths]
 # Generic input/output used by merge_trees, analyse_data, analyse_mc, signal, systematics, checkpoint
 input = "$NUCLEI_INPUT/data/LHC22/apass4/MergedAO2D.root"
-output = "$NUCLEI_INPUT/data/LHC22/apass4/DataHistosgiovanni.root"
+output = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/DataHistos.root"
 log_file = ""
-metadata_output = "run_metadata.json"
+metadata_output = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/run_metadata.json"
+report_dir = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/report"
 
 # Full-chain and stage-specific paths
 data_tree = "$NUCLEI_INPUT/data/LHC22/apass4/MergedAO2D.root"
-data_output = "$NUCLEI_INPUT/data/LHC22/apass4/DataHistosgiovanni.root"
+data_output = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/DataHistos.root"
 mc_tree = "$NUCLEI_INPUT/MC/LHC23j6b/MergedAO2D.root"
-mc_output = "$NUCLEI_INPUT/MC/LHC23j6b/MChistosgiovanni.root"
+mc_output = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/MChistos.root"
 
-signal_output = "$NUCLEI_OUTPUT/LHC22/apass4/signalgiovanni.root"
-systematics_output = "$NUCLEI_OUTPUT/LHC22/apass4/systematicsgiovanni.root"
-checkpoint_output = "checkpoint.root"
+signal_output = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/signal.root"
+systematics_output = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/systematics.root"
+checkpoint_output = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/checkpoint.root"
 
 data_analysis_results = "$NUCLEI_INPUT/data/LHC22/apass4/AnalysisResults.root"
 mc_analysis_results = "$NUCLEI_INPUT/MC/LHC23j6b/AnalysisResults.root"
 
 # Optional aliases used by systematics/checkpoint tasks
-signal_input = "$NUCLEI_OUTPUT/LHC22/apass4/signalgiovanni.root"
-mc_input = "$NUCLEI_INPUT/MC/LHC23j6b/MChistosgiovanni.root"
-systematics_input = "$NUCLEI_OUTPUT/LHC22/apass4/systematicsgiovanni.root"
+signal_input = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/signal.root"
+mc_input = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/MChistos.root"
+systematics_input = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/systematics.root"

@@ -48,7 +48,15 @@ def normalize_key(path: str, normalize_weff: bool) -> str:
     )
 
 
-def compare(ref_path: str, cand_path: str, content_tol: float, error_tol: float, normalize_weff: bool, ignore_errors: bool) -> Result:
+def compare(
+    ref_path: str,
+    cand_path: str,
+    content_tol: float,
+    error_tol: float,
+    normalize_weff: bool,
+    ignore_errors: bool,
+    allow_extra_keys: list[str],
+) -> Result:
     global ROOT
     if ROOT is None:
         import ROOT as _ROOT
@@ -60,7 +68,8 @@ def compare(ref_path: str, cand_path: str, content_tol: float, error_tol: float,
 
     common = sorted(set(ref) & set(cand))
     missing = sorted(set(ref) - set(cand))
-    extra = sorted(set(cand) - set(ref))
+    extra_raw = sorted(set(cand) - set(ref))
+    extra = [k for k in extra_raw if k not in allow_extra_keys]
 
     content_diffs = 0
     error_diffs = 0
@@ -110,9 +119,23 @@ def main() -> int:
     parser.add_argument("--error-tol", type=float, default=1e-9)
     parser.add_argument("--normalize-weff", action="store_true", help="Treat Weff* and effW* naming as equivalent")
     parser.add_argument("--ignore-errors", action="store_true", help="Ignore histogram error differences")
+    parser.add_argument(
+        "--allow-extra-key",
+        action="append",
+        default=[],
+        help="Candidate-only histogram key allowed by design. Repeat for multiple keys.",
+    )
     args = parser.parse_args()
 
-    res = compare(args.reference, args.candidate, args.content_tol, args.error_tol, args.normalize_weff, args.ignore_errors)
+    res = compare(
+        args.reference,
+        args.candidate,
+        args.content_tol,
+        args.error_tol,
+        args.normalize_weff,
+        args.ignore_errors,
+        args.allow_extra_key,
+    )
     print(f"ref_keys={res.ref_keys} cand_keys={res.cand_keys} common={res.common} missing={res.missing} extra={res.extra}")
     print(f"content_diffs={res.content_diffs} max_content_diff={res.max_content_diff}")
     print(f"error_diffs={res.error_diffs} max_error_diff={res.max_error_diff}")

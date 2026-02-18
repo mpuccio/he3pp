@@ -19,6 +19,7 @@ Legacy C++ analysis macro entrypoints were removed.
 - `signal`
 - `systematics`
 - `checkpoint`
+- `report`
 - `full_chain`
 
 ## Configuration model
@@ -32,6 +33,10 @@ Configurable from TOML:
 - `[paths]`: inputs/outputs.
 
 Reference template: `config.example.toml`.
+
+Outputs are now variant-scoped:
+`$NUCLEI_OUTPUT/<period>/<reco_pass>/<variant>/`
+with ROOT outputs, run metadata, and `report/index.html`.
 
 ## Remaining C++ dependency
 

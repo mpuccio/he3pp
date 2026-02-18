@@ -24,6 +24,9 @@ python3 scripts/validate_smoke.py \
   --reference "$NUCLEI_INPUT/MC/LHC23j6b/MChistosgiovanni.root" \
   --candidate /tmp/he3pp_validation/MChistosgiovanni_py.root \
   --normalize-weff \
-  --ignore-errors
+  --ignore-errors \
+  --allow-extra-key nuclei/hDeltaPtHe3 \
+  --allow-extra-key nuclei/hDeltaPtCorrHe3 \
+  --allow-extra-key nuclei/hMomResHe3
 
 echo "Smoke checks passed"

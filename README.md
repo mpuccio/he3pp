@@ -42,6 +42,10 @@ python3 -c 'import ROOT; print(ROOT.gROOT.GetVersion())'
 python3 he3_cli.py --config config.example.toml
 ```
 
+Outputs are organized per variant under:
+`$NUCLEI_OUTPUT/<period>/<reco_pass>/<variant>/`
+including analysis ROOT files, metadata, and report assets.
+
 Show default merged config:
 
 ```bash
@@ -62,11 +66,19 @@ Logging and metadata:
 - `[paths].log_file`: optional log file path
 - `[paths].metadata_output`: JSON metadata output for each run
 
+Report controls:
+
+- `[report].sections`: ordered list of report sections to render
+- `[report].fit_n_parameters`: free-parameter count used for chi2 NDF estimate
+- `[report].fit_alpha`: Pearson threshold for signal-fit `OK/KO` labels
+- `[report].fit_tail`: `single` (default) or `two` for p-value computation
+- `[report].tpc_signal_model`: TPC-only model used for extraction plots + summary table
+
 ## Tasks
 
 Supported tasks:
 
-`merge_trees | analyse_data | analyse_mc | signal | systematics | checkpoint | full_chain`
+`merge_trees | analyse_data | analyse_mc | signal | systematics | checkpoint | report | full_chain`
 
 ## Notes
 

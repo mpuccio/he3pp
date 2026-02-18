@@ -94,6 +94,14 @@ def default_config() -> dict:
             "draw": False,
             "is_mc": True,
             "log_level": "INFO",
+            "report_species": "antihe3",
+        },
+        "report": {
+            "sections": ["signal_tof", "signal_tpc", "raw_spectrum", "efficiency", "pt_resolution", "corrected_spectrum"],
+            "fit_n_parameters": 6,
+            "fit_alpha": 0.05,
+            "fit_tail": "single",
+            "tpc_signal_model": "ExpGaus",
         },
         "paths": {
             "input": s.DATA_TREE_FILENAME,
@@ -106,14 +114,16 @@ def default_config() -> dict:
             "systematics_output": s.SYSTEMATICS_OUTPUT,
             "data_analysis_results": s.DATA_ANALYSIS_RESULTS,
             "mc_analysis_results": s.MC_ANALYSIS_RESULTS,
-            "metadata_output": "run_metadata.json",
+            "metadata_output": f"{s.BASE_VARIANT_OUTPUT_DIR}run_metadata.json",
             "log_file": "",
+            "report_dir": f"{s.BASE_VARIANT_OUTPUT_DIR}report",
         },
     }
 
 
 def run(cfg: dict) -> None:
     run_cfg = cfg.get("run", {})
+    report_cfg = cfg.get("report", {})
     path_cfg_for_log = cfg.get("paths", {})
     _setup_logging(str(run_cfg.get("log_level", "INFO")), str(path_cfg_for_log.get("log_file", "") or ""))
     LOGGER.info("Starting run task=%s particle=%s", run_cfg.get("task", "analyse_data"), run_cfg.get("particle", "he3"))
@@ -165,6 +175,23 @@ def run(cfg: dict) -> None:
             path_cfg.get("signal_input", s.SIGNAL_OUTPUT),
             path_cfg.get("output"),
         )
+    elif task == "report":
+        from .reporting import generate_report
+
+        report_index = generate_report(
+            report_dir=path_cfg.get("report_dir", f"{s.BASE_VARIANT_OUTPUT_DIR}report"),
+            signal_file_path=path_cfg.get("signal_input", path_cfg.get("signal_output", s.SIGNAL_OUTPUT)),
+            mc_file_path=path_cfg.get("mc_input", path_cfg.get("mc_output", s.MC_FILENAME)),
+            systematics_file_path=path_cfg.get("systematics_input", path_cfg.get("systematics_output", s.SYSTEMATICS_OUTPUT)),
+            metadata_path=path_cfg.get("metadata_output", "run_metadata.json"),
+            species=str(run_cfg.get("report_species", "antihe3")),
+            sections=list(report_cfg.get("sections", [])),
+            fit_n_parameters=int(report_cfg.get("fit_n_parameters", 6)),
+            fit_alpha=float(report_cfg.get("fit_alpha", 0.05)),
+            fit_tail=str(report_cfg.get("fit_tail", "single")),
+            tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
+        )
+        LOGGER.info("Report generated: %s", report_index)
     elif task == "full_chain":
         tasks.analyse_data(path_cfg.get("data_tree", s.DATA_TREE_FILENAME), path_cfg.get("data_output", s.DATA_FILENAME), particle, bool(run_cfg.get("skim", False)), draw)
         tasks.analyse_mc(path_cfg.get("mc_tree", s.MC_TREE_FILENAME), path_cfg.get("mc_output", s.MC_FILENAME), particle, bool(run_cfg.get("enable_trials", True)), draw)
@@ -183,6 +210,22 @@ def run(cfg: dict) -> None:
             path_cfg.get("signal_output", s.SIGNAL_OUTPUT),
             path_cfg.get("checkpoint_output"),
         )
+        from .reporting import generate_report
+
+        report_index = generate_report(
+            report_dir=path_cfg.get("report_dir", f"{s.BASE_VARIANT_OUTPUT_DIR}report"),
+            signal_file_path=path_cfg.get("signal_output", s.SIGNAL_OUTPUT),
+            mc_file_path=path_cfg.get("mc_output", s.MC_FILENAME),
+            systematics_file_path=path_cfg.get("systematics_output", s.SYSTEMATICS_OUTPUT),
+            metadata_path=path_cfg.get("metadata_output", "run_metadata.json"),
+            species=str(run_cfg.get("report_species", "antihe3")),
+            sections=list(report_cfg.get("sections", [])),
+            fit_n_parameters=int(report_cfg.get("fit_n_parameters", 6)),
+            fit_alpha=float(report_cfg.get("fit_alpha", 0.05)),
+            fit_tail=str(report_cfg.get("fit_tail", "single")),
+            tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
+        )
+        LOGGER.info("Report generated: %s", report_index)
     else:
         raise ValueError(f"Unsupported task: {task}")
     LOGGER.info("Finished run task=%s elapsed_sec=%.2f", task, time.time() - t0)
@@ -203,7 +246,7 @@ def main() -> int:
 
     merged = default_config()
     merged.update(cfg)
-    for section in ("common", "selections", "cuts", "run", "paths"):
+    for section in ("common", "selections", "cuts", "run", "report", "paths"):
         merged.setdefault(section, {})
         merged[section].update(cfg.get(section, {}))
 

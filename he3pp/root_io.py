@@ -57,9 +57,21 @@ def load_fit_modules() -> None:
     global _FIT_LOADED
     if _FIT_LOADED:
         return
-    ROOT.gROOT.ProcessLine(".L src/RooGausExp.cxx+")
-    ROOT.gROOT.ProcessLine(".L src/RooGausDExp.cxx+")
-    ROOT.gROOT.ProcessLine(".L src/FitModules.cxx+")
+    # Prefer interpreted loading: more robust on macOS/python toolchains where
+    # ACLiC may fail to link temporary shared objects.
+    for line in (".L src/RooGausExp.cxx", ".L src/RooGausDExp.cxx", ".L src/FitModules.cxx"):
+        ROOT.gROOT.ProcessLine(line)
+
+    if not hasattr(ROOT, "FitExpTailGaus"):
+        # Fallback for setups that require ACLiC.
+        for line in (".L src/RooGausExp.cxx+", ".L src/RooGausDExp.cxx+", ".L src/FitModules.cxx+"):
+            ROOT.gROOT.ProcessLine(line)
+
+    if not hasattr(ROOT, "FitExpTailGaus"):
+        raise RuntimeError(
+            "Failed to load fit modules (FitExpTailGaus unavailable). "
+            "Check ROOT/O2 environment and src/ module compilation."
+        )
     _FIT_LOADED = True
 
 
