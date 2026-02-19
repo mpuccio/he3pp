@@ -1,11 +1,16 @@
 [common]
-period = "LHC22"
-reco_pass = "apass4"
-mc_production = "LHC23j6b"
-variant = "giovanni"
+period = "LHC24"
+reco_pass = "apass1"
+mc_production = "LHC25b9"
+variant = "default"
 base_input_dir = "$NUCLEI_INPUT/"
 base_output_root = "$NUCLEI_OUTPUT/"
 filter_list_name = "nuclei"
+# Basenames used to derive canonical input paths from period/reco_pass/mc_production.
+data_tree_basename = "AO2D_skimmed.root"
+data_analysis_results_basename = "AnalysisResults_skimmed.root"
+mc_tree_basename = "AO2D_coalescence.root"
+mc_analysis_results_basename = "AnalysisResults.root"
 pt_bins = [1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0]
 cent_pt_limits = [7.0]
 tpc_max_pt = 7.0
@@ -38,9 +43,7 @@ nsigmaTPC = [3.0, 4.0, 5.0]
 
 [run]
 task = "analyse_data"      # merge_trees | analyse_data | analyse_mc | signal | systematics | checkpoint | report | full_chain
-particle = "he3"           # he3 | he4
-report_mode = "single"     # single | dual (task=report)
-report_species_dual = ["antihe3", "antihe4"]  # used when report_mode=dual
+species = ["he3", "he4"]   # choose one or many among: he3, he4
 enable_mt = true
 nthreads = 0                # 0 -> ROOT default
 enable_trials = true
@@ -48,7 +51,6 @@ skim = false
 draw = false
 is_mc = true                # only used for merge_trees
 log_level = "INFO"          # DEBUG | INFO | WARNING | ERROR
-report_species = "antihe3"  # antihe3 | he3
 
 [report]
 # Section order and visibility for task=report/full_chain report generation.
@@ -63,42 +65,40 @@ fit_tail = "single"
 tpc_signal_model = "ExpGaus"
 
 [paths]
-# Generic input/output used by merge_trees, analyse_data, analyse_mc, signal, systematics, checkpoint
-input = "$NUCLEI_INPUT/data/LHC22/apass4/MergedAO2D.root"
-output = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/DataHistos.root"
+# Generic output used by merge_trees, analyse_data, analyse_mc, signal, systematics, checkpoint.
+# Input path is derived from [common] period/reco_pass (+ data_tree_basename).
+output = "$NUCLEI_OUTPUT/LHC24/apass1/default/DataHistos.root"
 log_file = ""
-metadata_output = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/run_metadata.json"
-report_dir = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/report"
+metadata_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/run_metadata.json"
+report_dir = "$NUCLEI_OUTPUT/LHC24/apass1/default/report"
 
 # Full-chain and stage-specific paths
-data_tree = "$NUCLEI_INPUT/data/LHC22/apass4/MergedAO2D.root"
-data_output = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/DataHistos.root"
-data_input = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/DataHistos.root"
-data_output_he3 = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/he3/DataHistos.root"
-data_output_he4 = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/he4/DataHistos.root"
-data_input_he3 = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/he3/DataHistos.root"
-data_input_he4 = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/he4/DataHistos.root"
-mc_tree = "$NUCLEI_INPUT/MC/LHC23j6b/MergedAO2D.root"
-mc_output = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/MChistos.root"
-mc_output_he3 = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/he3/MChistos.root"
-mc_output_he4 = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/he4/MChistos.root"
-mc_input_he3 = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/he3/MChistos.root"
-mc_input_he4 = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/he4/MChistos.root"
+data_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/DataHistos.root"
+data_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/DataHistos.root"
+data_output_he3 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/DataHistos.root"
+data_output_he4 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he4/DataHistos.root"
+data_input_he3 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/DataHistos.root"
+data_input_he4 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he4/DataHistos.root"
+mc_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/MChistos.root"
+mc_output_he3 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/MChistos.root"
+mc_output_he4 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he4/MChistos.root"
+mc_input_he3 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/MChistos.root"
+mc_input_he4 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he4/MChistos.root"
 
-signal_output = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/signal.root"
-systematics_output = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/systematics.root"
-checkpoint_output = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/checkpoint.root"
-signal_input_he3 = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/he3/signal.root"
-signal_input_he4 = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/he4/signal.root"
-systematics_input_he3 = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/he3/systematics.root"
-systematics_input_he4 = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/he4/systematics.root"
-metadata_output_he3 = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/he3/run_metadata.json"
-metadata_output_he4 = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/he4/run_metadata.json"
+signal_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/signal.root"
+systematics_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/systematics.root"
+checkpoint_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/checkpoint.root"
+signal_input_he3 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/signal.root"
+signal_input_he4 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he4/signal.root"
+systematics_input_he3 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/systematics.root"
+systematics_input_he4 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he4/systematics.root"
+metadata_output_he3 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/run_metadata.json"
+metadata_output_he4 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he4/run_metadata.json"
 
-data_analysis_results = "$NUCLEI_INPUT/data/LHC22/apass4/AnalysisResults.root"
-mc_analysis_results = "$NUCLEI_INPUT/MC/LHC23j6b/AnalysisResults.root"
+# data_analysis_results is derived from [common] period/reco_pass (+ data_analysis_results_basename).
+mc_analysis_results = "$NUCLEI_INPUT/MC/LHC25b9/MChistos_new_final.root"
 
 # Optional aliases used by systematics/checkpoint tasks
-signal_input = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/signal.root"
-mc_input = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/MChistos.root"
-systematics_input = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/systematics.root"
+signal_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/signal.root"
+mc_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/MChistos.root"
+systematics_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/systematics.root"

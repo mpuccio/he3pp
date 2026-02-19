@@ -55,10 +55,12 @@ python3 he3_cli.py --config config.example.toml --dump-default-config
 ## Config schema
 
 - `[common]`: former `Common.h` style constants (period, reco pass, pt bins, ranges, etc.)
+  - Input paths are derived from `period`/`reco_pass` (data) and `mc_production` (MC) plus optional basename keys:
+  `data_tree_basename`, `data_analysis_results_basename`, `mc_tree_basename`, `mc_analysis_results_basename`
 - `[selections]`: all data/MC filter expressions
 - `[cuts]`: trial scan grids (`nsigmaDCAz`, `fTPCnCls`, `nITScls`, `nsigmaTPC`)
 - `[run]`: task + runtime flags
-- `[paths]`: all input/output paths
+- `[paths]`: output paths and optional overrides (you typically do not need to set `input`/`data_tree`/`mc_tree`)
 
 Logging and metadata:
 
@@ -73,13 +75,12 @@ Report controls:
 - `[report].fit_alpha`: Pearson threshold for signal-fit `OK/KO` labels
 - `[report].fit_tail`: `single` (default) or `two` for p-value computation
 - `[report].tpc_signal_model`: TPC-only model used for extraction plots + summary table
-- `[run].report_mode`: `single` (default) or `dual` for `task=report`
-- `[run].report_species_dual`: species list for dual report mode (typically `["antihe3","antihe4"]`)
+- `[run].species`: processing/report species list (e.g. `["he3"]` or `["he3","he4"]`)
 
 Available report sections include:
 `signal_tof`, `signal_tpc`, `tof_tpc_2d`, `efficiency`, `pt_resolution`, `corrected_spectrum`.
 
-Dual report mode:
+When two species are requested:
 - Generates per-species subreports in `<report_dir>/he3/` and `<report_dir>/he4/`
 - Generates a top-level index at `<report_dir>/index.html` linking both pages
 - Uses species-specific input paths when provided:
@@ -99,28 +100,12 @@ Supported tasks:
 
 ## Smoke validation
 
-Data smoke:
+Dual smoke (LHC24 data + LHC25b9 MC, He3 + He4):
 
 ```bash
-python3 he3_cli.py --config tests/smoke/validate_data.toml
-python3 scripts/validate_smoke.py \
-  --reference "$NUCLEI_INPUT/data/LHC22/apass4/DataHistosgiovanni.root" \
-  --candidate /tmp/he3pp_validation/DataHistosgiovanni_py.root
-```
-
-MC smoke (content-only + naming normalization):
-
-```bash
-python3 he3_cli.py --config tests/smoke/validate_mc.toml
-python3 scripts/validate_smoke.py \
-  --reference "$NUCLEI_INPUT/MC/LHC23j6b/MChistosgiovanni.root" \
-  --candidate /tmp/he3pp_validation/MChistosgiovanni_py.root \
-  --normalize-weff \
-  --ignore-errors
-```
-
-One-command smoke run:
-
-```bash
+scripts/update_smoke_references.sh   # one-time or when intentionally refreshing references
 scripts/run_smoke_checks.sh
 ```
+
+Reference location used by smoke checks:
+`$NUCLEI_INPUT/smoke_references/python_dual/LHC24_apass1__LHC25b9/`

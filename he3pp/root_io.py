@@ -18,6 +18,39 @@ def ensure_parent(path: str) -> None:
     Path(path).expanduser().parent.mkdir(parents=True, exist_ok=True)
 
 
+def build_rdf_from_ao2d(tree_name: str, input_file: str) -> Any:
+    """Create an RDataFrame from AO2D file.
+
+    It supports both layouts:
+    1) tree directly in file root
+    2) per-chunk trees under DF_* directories
+    """
+    src = expand(input_file)
+    tfile = ROOT.TFile.Open(src)
+    if not tfile or tfile.IsZombie():
+        raise FileNotFoundError(f"Could not open input ROOT file: {src}")
+
+    direct = tfile.Get(tree_name)
+    if direct:
+        tfile.Close()
+        return ROOT.RDataFrame(tree_name, src)
+
+    chain = ROOT.TChain(tree_name)
+    keys = tfile.GetListOfKeys()
+    for key in keys:
+        key_name = key.GetName()
+        if key_name.startswith("DF_"):
+            chain.Add(f"{src}/{key_name}/{tree_name}")
+    tfile.Close()
+
+    if chain.GetEntries() <= 0:
+        raise RuntimeError(
+            f"Tree '{tree_name}' not found in file '{src}' "
+            "as top-level tree or under DF_* subdirectories."
+        )
+    return ROOT.RDataFrame(chain)
+
+
 def declare_helpers() -> None:
     global _DECLARED
     if _DECLARED:

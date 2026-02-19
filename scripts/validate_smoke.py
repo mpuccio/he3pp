@@ -40,11 +40,12 @@ def collect(tdir, prefix=""):
 def normalize_key(path: str, normalize_weff: bool) -> str:
     if not normalize_weff:
         return path
+    # Canonicalize both naming schemes to Weff* so comparisons are symmetric.
     return (
-        path.replace("/WeffTPCA", "/effWTPCA")
-        .replace("/WeffTPCM", "/effWTPCM")
-        .replace("/WeffTOFA", "/effWTOFA")
-        .replace("/WeffTOFM", "/effWTOFM")
+        path.replace("/effWTPCA", "/WeffTPCA")
+        .replace("/effWTPCM", "/WeffTPCM")
+        .replace("/effWTOFA", "/WeffTOFA")
+        .replace("/effWTOFM", "/WeffTOFM")
     )
 
 

@@ -1,11 +1,11 @@
 [run]
 task = "analyse_mc"
-particle = "he3"
+species = ["he3"]
 enable_mt = true
 enable_trials = true
 draw = false
 
 [paths]
 input = "$NUCLEI_INPUT/MC/LHC23j6b/MergedAO2D.root"
-output = "/tmp/he3pp_validation/MChistosgiovanni_py.root"
+output = "/tmp/he3pp_validation/MChistosdefault_py.root"
 metadata_output = "/tmp/he3pp_validation/mc_run_metadata.json"

@@ -6,7 +6,6 @@ if [[ -z "${NUCLEI_INPUT:-}" || -z "${NUCLEI_OUTPUT:-}" ]]; then
   exit 1
 fi
 
-# Ensure ROOT dynamic libs are available even if caller did not export them.
 ROOT_LIB_DEFAULT="/Users/mpuccio/alice/sw/osx_arm64/ROOT/v6-36-04-alice9-local3/lib"
 export ROOT_LIB="${ROOT_LIB:-$ROOT_LIB_DEFAULT}"
 export CPPYY_BACKEND_LIBRARY="${CPPYY_BACKEND_LIBRARY:-$ROOT_LIB/libcppyy_backend.so}"
@@ -15,18 +14,7 @@ export DYLD_LIBRARY_PATH="$ROOT_LIB:${DYLD_LIBRARY_PATH:-}"
 mkdir -p /tmp/he3pp_validation
 
 REF_ROOT="$NUCLEI_INPUT/smoke_references/python_dual/LHC24_apass1__LHC25b9"
-REF_DATA_HE3="$REF_ROOT/DataHistos_he3_ref.root"
-REF_DATA_HE4="$REF_ROOT/DataHistos_he4_ref.root"
-REF_MC_HE3="$REF_ROOT/MChistos_he3_ref.root"
-REF_MC_HE4="$REF_ROOT/MChistos_he4_ref.root"
-
-for p in "$REF_DATA_HE3" "$REF_DATA_HE4" "$REF_MC_HE3" "$REF_MC_HE4"; do
-  if [[ ! -f "$p" ]]; then
-    echo "Missing smoke reference: $p"
-    echo "Generate references first with: scripts/update_smoke_references.sh"
-    exit 1
-  fi
-done
+mkdir -p "$REF_ROOT"
 
 DATA_BASE="$NUCLEI_INPUT/data/LHC24/apass1"
 for candidate in AO2D.root AO2D_skimmed.root AO2D_sampled.root; do
@@ -55,14 +43,8 @@ tasks.analyse_data_multi(
     draw=False,
 )
 PY
-python3 scripts/validate_smoke.py \
-  --reference "$REF_DATA_HE3" \
-  --candidate /tmp/he3pp_validation/DataHistos_he3_py.root \
-  --allow-extra-prefix nuclei/hTOFMassVsTPCnsigma
-python3 scripts/validate_smoke.py \
-  --reference "$REF_DATA_HE4" \
-  --candidate /tmp/he3pp_validation/DataHistos_he4_py.root \
-  --allow-extra-prefix nuclei/hTOFMassVsTPCnsigma
+cp /tmp/he3pp_validation/DataHistos_he3_py.root "$REF_ROOT/DataHistos_he3_ref.root"
+cp /tmp/he3pp_validation/DataHistos_he4_py.root "$REF_ROOT/DataHistos_he4_ref.root"
 
 python3 - <<'PY'
 import os
@@ -78,15 +60,7 @@ tasks.analyse_mc_multi(
     draw=False,
 )
 PY
-python3 scripts/validate_smoke.py \
-  --reference "$REF_MC_HE3" \
-  --candidate /tmp/he3pp_validation/MChistos_he3_py.root \
-  --normalize-weff \
-  --ignore-errors
-python3 scripts/validate_smoke.py \
-  --reference "$REF_MC_HE4" \
-  --candidate /tmp/he3pp_validation/MChistos_he4_py.root \
-  --normalize-weff \
-  --ignore-errors
+cp /tmp/he3pp_validation/MChistos_he3_py.root "$REF_ROOT/MChistos_he3_ref.root"
+cp /tmp/he3pp_validation/MChistos_he4_py.root "$REF_ROOT/MChistos_he4_ref.root"
 
-echo "Smoke checks passed"
+echo "Updated smoke references under: $REF_ROOT"

@@ -6,7 +6,7 @@ from typing import Any
 import ROOT
 
 from .settings import *  # Loaded after runtime overrides in cli.run
-from .root_io import define_columns_for_data, ensure_parent, expand, h1_model, h2_model, load_fit_modules, ptr, write_hist
+from .root_io import build_rdf_from_ao2d, define_columns_for_data, ensure_parent, expand, h1_model, h2_model, load_fit_modules, ptr, write_hist
 
 LOGGER = logging.getLogger("he3pp.tasks")
 
@@ -41,6 +41,21 @@ def _run_graphs(actions: list[Any]) -> None:
     # Fallback for ROOT builds without RunGraphs.
     for action in actions:
         action.GetValue()
+
+
+def _find_object_by_class(root_dir: Any, class_name: str) -> Any | None:
+    """Depth-first search for the first object with the requested ROOT class."""
+    if not root_dir or not hasattr(root_dir, "GetListOfKeys"):
+        return None
+    for key in root_dir.GetListOfKeys():
+        obj = key.ReadObj()
+        if obj and hasattr(obj, "ClassName") and obj.ClassName() == class_name:
+            return obj
+        if obj and hasattr(obj, "InheritsFrom") and obj.InheritsFrom("TDirectory"):
+            found = _find_object_by_class(obj, class_name)
+            if found:
+                return found
+    return None
 
 
 def _book_data_species(df_all: Any, particle: str, skim: bool = False, tag: str = "") -> dict[str, Any]:
@@ -176,7 +191,7 @@ def _write_data_bundle(bundle: dict[str, Any], output_file: str) -> None:
 def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = False, draw: bool = False) -> None:
     LOGGER.info("analyse_data start particle=%s input=%s output=%s", particle, input_file, output_file)
     ROOT.gStyle.SetOptStat(0)
-    rdf = ROOT.RDataFrame("O2nucleitable", expand(input_file))
+    rdf = build_rdf_from_ao2d("O2nucleitable", input_file)
     df_all = define_columns_for_data(rdf)
     bundle = _book_data_species(df_all, particle, skim=skim, tag=f"_{particle}")
     _run_graphs(
@@ -205,29 +220,33 @@ def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = 
     LOGGER.info("analyse_data done output=%s", output_file)
 
 
-def analyse_data_dual(input_file: str, he3_output_file: str, he4_output_file: str, skim: bool = False, draw: bool = False) -> None:
-    LOGGER.info("analyse_data_dual start input=%s he3_out=%s he4_out=%s", input_file, he3_output_file, he4_output_file)
+def analyse_data_multi(input_file: str, outputs: dict[str, str], skim: bool = False, draw: bool = False) -> None:
+    particles = [p for p in ("he3", "he4") if p in outputs]
+    if not particles:
+        raise ValueError("analyse_data_multi requires at least one output among {'he3','he4'}.")
+    LOGGER.info("analyse_data_multi start input=%s particles=%s", input_file, particles)
     ROOT.gStyle.SetOptStat(0)
-    rdf = ROOT.RDataFrame("O2nucleitable", expand(input_file))
+    rdf = build_rdf_from_ao2d("O2nucleitable", input_file)
     df_all = define_columns_for_data(rdf)
-    bundle_he3 = _book_data_species(df_all, "he3", skim=skim, tag="_he3")
-    bundle_he4 = _book_data_species(df_all, "he4", skim=False, tag="_he4")
-    _run_graphs(
-        _collect_rresult_ptrs(bundle_he3["h_tpc"])
-        + _collect_rresult_ptrs(bundle_he3["h_tof"])
-        + _collect_rresult_ptrs(bundle_he3["h_dca_xy"])
-        + _collect_rresult_ptrs(bundle_he3["h_dca_z"])
-        + _collect_rresult_ptrs(bundle_he3["h_dca_xy_secondary"])
-        + _collect_rresult_ptrs(bundle_he3["h_tof_mass_vs_tpc_nsigma"])
-        + _collect_rresult_ptrs(bundle_he4["h_tpc"])
-        + _collect_rresult_ptrs(bundle_he4["h_tof"])
-        + _collect_rresult_ptrs(bundle_he4["h_dca_xy"])
-        + _collect_rresult_ptrs(bundle_he4["h_dca_z"])
-        + _collect_rresult_ptrs(bundle_he4["h_dca_xy_secondary"])
-        + _collect_rresult_ptrs(bundle_he4["h_tof_mass_vs_tpc_nsigma"])
-    )
+
+    bundles: dict[str, dict[str, Any]] = {}
+    all_actions: list[Any] = []
+    for particle in particles:
+        bundle = _book_data_species(df_all, particle, skim=(skim and particle == "he3"), tag=f"_{particle}")
+        bundles[particle] = bundle
+        all_actions += (
+            _collect_rresult_ptrs(bundle["h_tpc"])
+            + _collect_rresult_ptrs(bundle["h_tof"])
+            + _collect_rresult_ptrs(bundle["h_dca_xy"])
+            + _collect_rresult_ptrs(bundle["h_dca_z"])
+            + _collect_rresult_ptrs(bundle["h_dca_xy_secondary"])
+            + _collect_rresult_ptrs(bundle["h_tof_mass_vs_tpc_nsigma"])
+        )
+    _run_graphs(all_actions)
+
     if draw:
-        for bundle in (bundle_he3, bundle_he4):
+        for particle in particles:
+            bundle = bundles[particle]
             for hist_map, labels in (
                 (bundle["h_tpc"], ("A", "M")),
                 (bundle["h_tof"], ("A", "M")),
@@ -236,9 +255,9 @@ def analyse_data_dual(input_file: str, he3_output_file: str, he4_output_file: st
                     c = ROOT.TCanvas()
                     c.SetRightMargin(0.15)
                     hist_map[label][0].DrawClone("colz")
-    _write_data_bundle(bundle_he3, he3_output_file)
-    _write_data_bundle(bundle_he4, he4_output_file)
-    LOGGER.info("analyse_data_dual done he3_out=%s he4_out=%s", he3_output_file, he4_output_file)
+    for particle in particles:
+        _write_data_bundle(bundles[particle], outputs[particle])
+    LOGGER.info("analyse_data_multi done outputs=%s", {k: outputs[k] for k in particles})
 
 
 def _book_mc_species(df_data: Any, particle: str, enable_trials: bool, tag: str = "") -> dict[str, Any]:
@@ -445,7 +464,7 @@ def _write_mc_bundle(bundle: dict[str, Any], output_file: str) -> None:
 def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: bool, draw: bool = False) -> None:
     LOGGER.info("analyse_mc start particle=%s input=%s output=%s", particle, input_file, output_file)
     ROOT.gStyle.SetOptStat(0)
-    rdf = ROOT.RDataFrame("O2nucleitablemc", expand(input_file))
+    rdf = build_rdf_from_ao2d("O2nucleitablemc", input_file)
     df_data = define_columns_for_data(rdf)
     bundle = _book_mc_species(df_data, particle, enable_trials, tag=f"_{particle}")
     _run_graphs(bundle["actions"])
@@ -455,20 +474,29 @@ def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: 
     LOGGER.info("analyse_mc done output=%s", output_file)
 
 
-def analyse_mc_dual(input_file: str, he3_output_file: str, he4_output_file: str, enable_trials: bool, draw: bool = False) -> None:
-    LOGGER.info("analyse_mc_dual start input=%s he3_out=%s he4_out=%s", input_file, he3_output_file, he4_output_file)
+def analyse_mc_multi(input_file: str, outputs: dict[str, str], enable_trials: bool, draw: bool = False) -> None:
+    particles = [p for p in ("he3", "he4") if p in outputs]
+    if not particles:
+        raise ValueError("analyse_mc_multi requires at least one output among {'he3','he4'}.")
+    LOGGER.info("analyse_mc_multi start input=%s particles=%s", input_file, particles)
     ROOT.gStyle.SetOptStat(0)
-    rdf = ROOT.RDataFrame("O2nucleitablemc", expand(input_file))
+    rdf = build_rdf_from_ao2d("O2nucleitablemc", input_file)
     df_data = define_columns_for_data(rdf)
-    bundle_he3 = _book_mc_species(df_data, "he3", enable_trials, tag="_he3")
-    bundle_he4 = _book_mc_species(df_data, "he4", enable_trials, tag="_he4")
-    _run_graphs(bundle_he3["actions"] + bundle_he4["actions"])
+
+    bundles: dict[str, dict[str, Any]] = {}
+    all_actions: list[Any] = []
+    for particle in particles:
+        bundle = _book_mc_species(df_data, particle, enable_trials, tag=f"_{particle}")
+        bundles[particle] = bundle
+        all_actions += bundle["actions"]
+    _run_graphs(all_actions)
+
     if draw:
-        _draw_mc_eff(bundle_he3, "effMatterAntiMatter_he3")
-        _draw_mc_eff(bundle_he4, "effMatterAntiMatter_he4")
-    _write_mc_bundle(bundle_he3, he3_output_file)
-    _write_mc_bundle(bundle_he4, he4_output_file)
-    LOGGER.info("analyse_mc_dual done he3_out=%s he4_out=%s", he3_output_file, he4_output_file)
+        for particle in particles:
+            _draw_mc_eff(bundles[particle], f"effMatterAntiMatter_{particle}")
+    for particle in particles:
+        _write_mc_bundle(bundles[particle], outputs[particle])
+    LOGGER.info("analyse_mc_multi done outputs=%s", {k: outputs[k] for k in particles})
 
 
 def signal(input_file: str, output_file: str) -> None:
@@ -723,10 +751,30 @@ def systematics(signal_file: str, mc_file: str, data_analysis_results: str, outp
     f_mc = ROOT.TFile(expand(mc_file))
     an_results = ROOT.TFile(expand(data_analysis_results))
 
+    # Skimmed productions: prefer ZorroSummary normalization factor when available.
+    norm = None
+    zorro_summary = _find_object_by_class(an_results, "ZorroSummary")
+    if zorro_summary:
+        for method_name in ("getNormalisationFactor", "GetNormalisationFactor"):
+            method = getattr(zorro_summary, method_name, None)
+            if callable(method):
+                norm = float(method())
+                LOGGER.info("systematics normalization from ZorroSummary.%s(): %.6g", method_name, norm)
+                break
+
     h_ntvx = an_results.Get("bc-selection-task/hCounterTVX")
+    if not h_ntvx:
+        h_ntvx = an_results.Get("bc-selection-task/hCounterTVXafterBCcuts")
     h_nvtx = an_results.Get("nuclei-spectra/spectra/hRecVtxZData")
-    _ = h_ntvx.GetEntries()
-    norm = h_nvtx.GetEntries()
+    if not h_nvtx:
+        raise RuntimeError("Missing normalization histogram: nuclei-spectra/spectra/hRecVtxZData")
+    if h_ntvx and hasattr(h_ntvx, "GetEntries"):
+        _ = h_ntvx.GetEntries()
+    if norm is None:
+        norm = h_nvtx.GetEntries()
+        LOGGER.warning("systematics fallback normalization from hRecVtxZData entries: %.6g", norm)
+    if norm <= 0:
+        raise RuntimeError(f"Invalid normalization factor: {norm}")
 
     syst_tpc = [ROOT.TH2D(f"systTPC{NAMES[i]}", ";#it{p}_{T} (GeV/#it{c});Relative systematics TPC", N_PT_BINS, PT_BIN_ARRAY, 50, -0.5, 0.5) for i in range(2)]
     syst_tof = [ROOT.TH2D(f"systTOF{NAMES[i]}", ";#it{p}_{T} (GeV/#it{c});Relative systematics TOF", N_PT_BINS, PT_BIN_ARRAY, 50, -0.5, 0.5) for i in range(2)]

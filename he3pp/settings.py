@@ -12,6 +12,10 @@ VARIANT = "giovanni"
 BASE_INPUT_DIR = "$NUCLEI_INPUT/"
 BASE_OUTPUT_ROOT = "$NUCLEI_OUTPUT/"
 FILTER_LIST_NAME = "nuclei"
+DATA_TREE_BASENAME = "AO2D.root"
+DATA_ANALYSIS_RESULTS_BASENAME = "AnalysisResults.root"
+MC_TREE_BASENAME = "AO2D_coalescence.root"
+MC_ANALYSIS_RESULTS_BASENAME = "AnalysisResults.root"
 
 BASE_REC_SELECTIONS = "fTPCnCls >= 110 && nITScls >= 5 && std::abs(fEta) < 0.9 && std::abs(fDCAxy) < 0.7 && pt > 0.8 && pt < 9.0"
 DEFAULT_REC_SELECTIONS = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) < 7 && std::abs(fDCAxy) < 0.2"
@@ -72,12 +76,12 @@ def recompute_derived_globals() -> None:
 
     BASE_OUTPUT_DIR = f"{BASE_OUTPUT_ROOT}{PERIOD}/{RECO_PASS}/"
     BASE_VARIANT_OUTPUT_DIR = f"{BASE_OUTPUT_DIR}{VARIANT}/"
-    DATA_TREE_FILENAME = f"{BASE_INPUT_DIR}data/{PERIOD}/{RECO_PASS}/MergedAO2D.root"
+    DATA_TREE_FILENAME = f"{BASE_INPUT_DIR}data/{PERIOD}/{RECO_PASS}/{DATA_TREE_BASENAME}"
     DATA_FILENAME = f"{BASE_VARIANT_OUTPUT_DIR}DataHistos.root"
     DATA_FILENAME_HE4 = f"{BASE_VARIANT_OUTPUT_DIR}DataHistosHe4.root"
-    DATA_ANALYSIS_RESULTS = f"{BASE_INPUT_DIR}data/{PERIOD}/{RECO_PASS}/AnalysisResults.root"
-    MC_ANALYSIS_RESULTS = f"{BASE_INPUT_DIR}MC/{MC_PRODUCTION}/AnalysisResults.root"
-    MC_TREE_FILENAME = f"{BASE_INPUT_DIR}MC/{MC_PRODUCTION}/MergedAO2D.root"
+    DATA_ANALYSIS_RESULTS = f"{BASE_INPUT_DIR}data/{PERIOD}/{RECO_PASS}/{DATA_ANALYSIS_RESULTS_BASENAME}"
+    MC_ANALYSIS_RESULTS = f"{BASE_INPUT_DIR}MC/{MC_PRODUCTION}/{MC_ANALYSIS_RESULTS_BASENAME}"
+    MC_TREE_FILENAME = f"{BASE_INPUT_DIR}MC/{MC_PRODUCTION}/{MC_TREE_BASENAME}"
     MC_FILENAME = f"{BASE_VARIANT_OUTPUT_DIR}MChistos.root"
     MC_FILENAME_HE4 = f"{BASE_VARIANT_OUTPUT_DIR}MChistosHe4.root"
     SIGNAL_OUTPUT = f"{BASE_VARIANT_OUTPUT_DIR}signal.root"
@@ -86,6 +90,7 @@ def recompute_derived_globals() -> None:
 
 def apply_runtime_overrides(cfg: dict[str, Any]) -> None:
     global MC_PRODUCTION, RECO_PASS, PERIOD, VARIANT, BASE_INPUT_DIR, BASE_OUTPUT_ROOT, FILTER_LIST_NAME
+    global DATA_TREE_BASENAME, DATA_ANALYSIS_RESULTS_BASENAME, MC_TREE_BASENAME, MC_ANALYSIS_RESULTS_BASENAME
     global BASE_REC_SELECTIONS, DEFAULT_REC_SELECTIONS, HE4_BASE_SELECTION, HE4_PRIMARY_SELECTION
     global SECONDARY_SELECTION, HE3_TRIAL_DCA_SELECTION, HE3_NSIGMA_TOF_CUT, HE4_NSIGMA_TOF_CUT
     global SKIM_SELECTION_TEMPLATE
@@ -105,6 +110,10 @@ def apply_runtime_overrides(cfg: dict[str, Any]) -> None:
     BASE_INPUT_DIR = str(common.get("base_input_dir", BASE_INPUT_DIR))
     BASE_OUTPUT_ROOT = str(common.get("base_output_root", BASE_OUTPUT_ROOT))
     FILTER_LIST_NAME = str(common.get("filter_list_name", FILTER_LIST_NAME))
+    DATA_TREE_BASENAME = str(common.get("data_tree_basename", DATA_TREE_BASENAME))
+    DATA_ANALYSIS_RESULTS_BASENAME = str(common.get("data_analysis_results_basename", DATA_ANALYSIS_RESULTS_BASENAME))
+    MC_TREE_BASENAME = str(common.get("mc_tree_basename", MC_TREE_BASENAME))
+    MC_ANALYSIS_RESULTS_BASENAME = str(common.get("mc_analysis_results_basename", MC_ANALYSIS_RESULTS_BASENAME))
 
     pt_bins = list(common.get("pt_bins", PT_BINS))
     if len(pt_bins) < 2:

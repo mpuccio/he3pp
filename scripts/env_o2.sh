@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# Intentionally avoid `set -euo pipefail` here: this file is sourced in an
+# interactive shell and must not leak strict-mode flags to the caller.
 
 # Source this file: `source scripts/env_o2.sh`
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+is_sourced=0
+if [[ -n "${BASH_VERSION-}" ]]; then
+  [[ "${BASH_SOURCE[0]-}" != "$0" ]] && is_sourced=1
+elif [[ -n "${ZSH_VERSION-}" ]]; then
+  [[ "${ZSH_EVAL_CONTEXT-}" == *:file* ]] && is_sourced=1
+fi
+
+if [[ "$is_sourced" -ne 1 ]]; then
   echo "Source this script instead of executing it: source scripts/env_o2.sh"
   exit 1
 fi
 
-eval "$(alienv load O2/latest)"
+alienv load O2/latest
 
 ROOT_LIB_DEFAULT="/Users/mpuccio/alice/sw/osx_arm64/ROOT/v6-36-04-alice9-local3/lib"
 export ROOT_LIB="${ROOT_LIB:-$ROOT_LIB_DEFAULT}"
