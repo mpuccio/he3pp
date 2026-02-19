@@ -97,7 +97,7 @@ def default_config() -> dict:
             "report_species": "antihe3",
         },
         "report": {
-            "sections": ["signal_tof", "signal_tpc", "raw_spectrum", "efficiency", "pt_resolution", "corrected_spectrum"],
+            "sections": ["signal_tof", "signal_tpc", "tof_tpc_2d", "raw_spectrum", "efficiency", "pt_resolution", "corrected_spectrum"],
             "fit_n_parameters": 6,
             "fit_alpha": 0.05,
             "fit_tail": "single",
@@ -108,6 +108,7 @@ def default_config() -> dict:
             "output": s.DATA_FILENAME,
             "data_tree": s.DATA_TREE_FILENAME,
             "data_output": s.DATA_FILENAME,
+            "data_input": s.DATA_FILENAME,
             "mc_tree": s.MC_TREE_FILENAME,
             "mc_output": s.MC_FILENAME,
             "signal_output": s.SIGNAL_OUTPUT,
@@ -190,6 +191,7 @@ def run(cfg: dict) -> None:
             fit_alpha=float(report_cfg.get("fit_alpha", 0.05)),
             fit_tail=str(report_cfg.get("fit_tail", "single")),
             tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
+            data_file_path=path_cfg.get("data_input", path_cfg.get("data_output", s.DATA_FILENAME)),
         )
         LOGGER.info("Report generated: %s", report_index)
     elif task == "full_chain":
@@ -224,6 +226,7 @@ def run(cfg: dict) -> None:
             fit_alpha=float(report_cfg.get("fit_alpha", 0.05)),
             fit_tail=str(report_cfg.get("fit_tail", "single")),
             tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
+            data_file_path=path_cfg.get("data_output", s.DATA_FILENAME),
         )
         LOGGER.info("Report generated: %s", report_index)
     else:

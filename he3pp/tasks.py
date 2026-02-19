@@ -30,6 +30,7 @@ def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = 
         mass_cut = "hasGoodTOFmassHe4"
         pt_name = "ptHe4"
         dmass = "deltaMassHe4"
+        nominal_mass = 3.72738
         tpc_anti_model = ROOT.RDF.TH2DModel("fATPCcounts", ";#it{p}_{T}^{rec} (GeV/#it{c});^{4}#bar{He} n#sigma_{TPC};Counts", 160, 0.5, 4.5, 100, -5, 5)
         tpc_mat_model = h2_model("fMTPCcounts", ";#it{p}_{T}^{rec} (GeV/#it{c});^{4}He n#sigma_{TPC};Counts", 100, -5, 5)
     else:
@@ -40,6 +41,7 @@ def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = 
         mass_cut = "hasGoodTOFmassHe3"
         pt_name = "pt"
         dmass = "deltaMassHe3"
+        nominal_mass = 2.80839
         tpc_anti_model = h2_model("fATPCcounts", ";#it{p}_{T}^{rec} (GeV/#it{c});^{3}#bar{He} n#sigma_{TPC};Counts", 100, -5, 5)
         tpc_mat_model = h2_model("fMTPCcounts", ";#it{p}_{T}^{rec} (GeV/#it{c});^{3}He n#sigma_{TPC};Counts", 100, -5, 5)
 
@@ -68,6 +70,33 @@ def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = 
         isotope = "4" if particle == "he4" else "3"
         species_label = f"^{{{isotope}}}#bar{{He}}" if label == "A" else f"^{{{isotope}}}He"
         h_tof[label] = [df_primary.Filter(f"{matter_sel} && std::abs({nsigma}) < {nsigma_tof_cut}").Histo2D(h2_model(f"f{label}TOFsignal", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});m_{{TOF}}-m_{{{species_label}}};Counts", 100, -0.9, 1.1), pt_name, dmass)]
+
+    # Build the TOF delta-mass axis explicitly for the reporting 2D maps.
+    df_primary = df_primary.Define("tofMassDeltaPOI", f"tofMass - {nominal_mass}")
+    tof_delta_mass_range = (-0.6, 0.6) if particle == "he4" else (-1.0, 1.0)
+    h_tof_mass_vs_tpc_nsigma: dict[str, list[Any]] = {"A": [], "M": []}
+    for i_pt in range(N_PT_BINS):
+        pt_low = PT_BINS[i_pt]
+        pt_high = PT_BINS[i_pt + 1]
+        for label, matter_sel in matter_map.items():
+            h_tof_mass_vs_tpc_nsigma[label].append(
+                df_primary.Filter(
+                    f"{matter_sel} && hasTOF && std::abs({nsigma}) < 6 && {pt_name} >= {pt_low} && {pt_name} < {pt_high}"
+                ).Histo2D(
+                    ROOT.RDF.TH2DModel(
+                        f"hTOFMassVsTPCnsigma{label}_pt{i_pt:02d}",
+                        ";n#sigma_{TPC};m_{TOF}-m_{0} (GeV/#it{c}^{2});Counts",
+                        120,
+                        -6.0,
+                        6.0,
+                        120,
+                        tof_delta_mass_range[0],
+                        tof_delta_mass_range[1],
+                    ),
+                    nsigma,
+                    "tofMassDeltaPOI",
+                )
+            )
 
     i_trial = 0
     if particle == "he3":
@@ -112,6 +141,9 @@ def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = 
         write_hist(h_dca_z[label][0], f"hDCAz{label}He3")
     for label in ("M", "A"):
         write_hist(h_dca_xy_secondary[label][0], f"hDCAxySecondary{label}He3")
+    for i_pt in range(N_PT_BINS):
+        for label in ("A", "M"):
+            write_hist(h_tof_mass_vs_tpc_nsigma[label][i_pt], f"hTOFMassVsTPCnsigma{label}_pt{i_pt:02d}")
 
     for idx in range(i_trial):
         dtrial = out.mkdir(f"nuclei{idx}")

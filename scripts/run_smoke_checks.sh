@@ -17,7 +17,8 @@ mkdir -p /tmp/he3pp_validation
 python3 he3_cli.py --config tests/smoke/validate_data.toml
 python3 scripts/validate_smoke.py \
   --reference "$NUCLEI_INPUT/data/LHC22/apass4/DataHistosgiovanni.root" \
-  --candidate /tmp/he3pp_validation/DataHistosgiovanni_py.root
+  --candidate /tmp/he3pp_validation/DataHistosgiovanni_py.root \
+  --allow-extra-prefix nuclei/hTOFMassVsTPCnsigma
 
 python3 he3_cli.py --config tests/smoke/validate_mc.toml
 python3 scripts/validate_smoke.py \

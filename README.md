@@ -74,6 +74,9 @@ Report controls:
 - `[report].fit_tail`: `single` (default) or `two` for p-value computation
 - `[report].tpc_signal_model`: TPC-only model used for extraction plots + summary table
 
+Available report sections include:
+`signal_tof`, `signal_tpc`, `tof_tpc_2d`, `efficiency`, `pt_resolution`, `corrected_spectrum`.
+
 ## Tasks
 
 Supported tasks:

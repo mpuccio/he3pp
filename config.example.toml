@@ -50,7 +50,7 @@ report_species = "antihe3"  # antihe3 | he3
 
 [report]
 # Section order and visibility for task=report/full_chain report generation.
-sections = ["signal_tof", "signal_tpc", "raw_spectrum", "efficiency", "pt_resolution", "corrected_spectrum"]
+sections = ["signal_tof", "signal_tpc", "tof_tpc_2d", "efficiency", "pt_resolution", "corrected_spectrum"]
 # Number of free fit parameters used when estimating NDF for chi2/ndf.
 fit_n_parameters = 6
 # Pearson test threshold (fit is KO if p-value < fit_alpha).
@@ -71,6 +71,7 @@ report_dir = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/report"
 # Full-chain and stage-specific paths
 data_tree = "$NUCLEI_INPUT/data/LHC22/apass4/MergedAO2D.root"
 data_output = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/DataHistos.root"
+data_input = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/DataHistos.root"
 mc_tree = "$NUCLEI_INPUT/MC/LHC23j6b/MergedAO2D.root"
 mc_output = "$NUCLEI_OUTPUT/LHC22/apass4/giovanni/MChistos.root"
 

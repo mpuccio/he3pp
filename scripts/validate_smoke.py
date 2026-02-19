@@ -56,6 +56,7 @@ def compare(
     normalize_weff: bool,
     ignore_errors: bool,
     allow_extra_keys: list[str],
+    allow_extra_prefixes: list[str],
 ) -> Result:
     global ROOT
     if ROOT is None:
@@ -69,7 +70,11 @@ def compare(
     common = sorted(set(ref) & set(cand))
     missing = sorted(set(ref) - set(cand))
     extra_raw = sorted(set(cand) - set(ref))
-    extra = [k for k in extra_raw if k not in allow_extra_keys]
+    extra = [
+        k
+        for k in extra_raw
+        if k not in allow_extra_keys and not any(k.startswith(prefix) for prefix in allow_extra_prefixes)
+    ]
 
     content_diffs = 0
     error_diffs = 0
@@ -125,6 +130,12 @@ def main() -> int:
         default=[],
         help="Candidate-only histogram key allowed by design. Repeat for multiple keys.",
     )
+    parser.add_argument(
+        "--allow-extra-prefix",
+        action="append",
+        default=[],
+        help="Candidate-only histogram key prefix allowed by design. Repeat for multiple prefixes.",
+    )
     args = parser.parse_args()
 
     res = compare(
@@ -135,6 +146,7 @@ def main() -> int:
         args.normalize_weff,
         args.ignore_errors,
         args.allow_extra_key,
+        args.allow_extra_prefix,
     )
     print(f"ref_keys={res.ref_keys} cand_keys={res.cand_keys} common={res.common} missing={res.missing} extra={res.extra}")
     print(f"content_diffs={res.content_diffs} max_content_diff={res.max_content_diff}")
