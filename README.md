@@ -73,9 +73,17 @@ Report controls:
 - `[report].fit_alpha`: Pearson threshold for signal-fit `OK/KO` labels
 - `[report].fit_tail`: `single` (default) or `two` for p-value computation
 - `[report].tpc_signal_model`: TPC-only model used for extraction plots + summary table
+- `[run].report_mode`: `single` (default) or `dual` for `task=report`
+- `[run].report_species_dual`: species list for dual report mode (typically `["antihe3","antihe4"]`)
 
 Available report sections include:
 `signal_tof`, `signal_tpc`, `tof_tpc_2d`, `efficiency`, `pt_resolution`, `corrected_spectrum`.
+
+Dual report mode:
+- Generates per-species subreports in `<report_dir>/he3/` and `<report_dir>/he4/`
+- Generates a top-level index at `<report_dir>/index.html` linking both pages
+- Uses species-specific input paths when provided:
+`data_input_he3/he4`, `mc_input_he3/he4`, `signal_input_he3/he4`, `systematics_input_he3/he4`, `metadata_output_he3/he4`
 
 ## Tasks
 

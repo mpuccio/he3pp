@@ -581,3 +581,62 @@ img { width:100%; border-radius:10px; border:1px solid #d6dddc; background:#ffff
         h.write(script)
         h.write("</main></body></html>")
     return str(html_path)
+
+
+def generate_dual_report_index(
+    report_dir: str,
+    entries: list[dict[str, str]],
+    metadata_path: str | None = None,
+) -> str:
+    report_dir = expand(report_dir)
+    _mkdir(report_dir)
+    meta = {}
+    if metadata_path and os.path.exists(expand(metadata_path)):
+        with open(expand(metadata_path), "r", encoding="utf-8") as f:
+            meta = json.load(f)
+
+    cards: list[str] = []
+    for e in entries:
+        label = html.escape(e.get("label", e.get("species", "species")))
+        species = html.escape(e.get("species", ""))
+        href = html.escape(e.get("href", ""))
+        cards.append(
+            "<article class='card'>"
+            f"<h2>{label}</h2>"
+            f"<p><b>Species:</b> {species}</p>"
+            f"<p><a href='{href}'>Open Report</a></p>"
+            "</article>"
+        )
+
+    style = """
+<style>
+:root { --bg:#f6f3ec; --panel:#fffef8; --ink:#1f2a30; --muted:#5f6c74; --accent:#005f73; --border:#d9d2c4; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:"Avenir Next","Segoe UI",sans-serif; color:var(--ink); background:var(--bg); }
+.wrap { max-width:980px; margin:0 auto; padding:26px 20px 40px; }
+h1 { margin:0 0 8px; }
+.meta { color:var(--muted); margin-bottom:18px; }
+.grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px,1fr)); gap:14px; }
+.card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px; }
+.card h2 { margin:0 0 8px; color:var(--accent); font-size:1.1rem; }
+a { color:var(--accent); text-decoration:none; font-weight:700; }
+details { margin-top:18px; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:12px 14px; }
+summary { cursor:pointer; }
+pre { white-space:pre-wrap; margin:10px 0 0; }
+</style>
+"""
+
+    html_path = Path(report_dir) / "index.html"
+    with open(html_path, "w", encoding="utf-8") as h:
+        h.write("<html><head><meta charset='utf-8'><title>He3pp Dual Report</title>")
+        h.write(style)
+        h.write("</head><body><main class='wrap'>")
+        h.write("<h1>He3pp Dual Report</h1>")
+        h.write(f"<p class='meta'><b>Variant:</b> {html.escape(s.VARIANT)} | <b>Species reports:</b> {len(entries)}</p>")
+        h.write(f"<section class='grid'>{''.join(cards)}</section>")
+        if meta:
+            h.write("<details><summary><b>Run Metadata</b></summary><pre>")
+            h.write(html.escape(json.dumps(meta, indent=2)))
+            h.write("</pre></details>")
+        h.write("</main></body></html>")
+    return str(html_path)

@@ -87,6 +87,7 @@ def default_config() -> dict:
         "run": {
             "task": "analyse_data",
             "particle": "he3",
+            "report_mode": "single",
             "enable_mt": True,
             "nthreads": 0,
             "enable_trials": True,
@@ -95,9 +96,10 @@ def default_config() -> dict:
             "is_mc": True,
             "log_level": "INFO",
             "report_species": "antihe3",
+            "report_species_dual": ["antihe3", "antihe4"],
         },
         "report": {
-            "sections": ["signal_tof", "signal_tpc", "tof_tpc_2d", "raw_spectrum", "efficiency", "pt_resolution", "corrected_spectrum"],
+            "sections": ["signal_tof", "signal_tpc", "tof_tpc_2d", "efficiency", "pt_resolution", "corrected_spectrum"],
             "fit_n_parameters": 6,
             "fit_alpha": 0.05,
             "fit_tail": "single",
@@ -113,6 +115,10 @@ def default_config() -> dict:
             "mc_output": s.MC_FILENAME,
             "signal_output": s.SIGNAL_OUTPUT,
             "systematics_output": s.SYSTEMATICS_OUTPUT,
+            "data_output_he3": s.DATA_FILENAME,
+            "data_output_he4": s.DATA_FILENAME_HE4,
+            "mc_output_he3": s.MC_FILENAME,
+            "mc_output_he4": s.MC_FILENAME_HE4,
             "data_analysis_results": s.DATA_ANALYSIS_RESULTS,
             "mc_analysis_results": s.MC_ANALYSIS_RESULTS,
             "metadata_output": f"{s.BASE_VARIANT_OUTPUT_DIR}run_metadata.json",
@@ -177,23 +183,55 @@ def run(cfg: dict) -> None:
             path_cfg.get("output"),
         )
     elif task == "report":
-        from .reporting import generate_report
+        from .reporting import generate_dual_report_index, generate_report
 
-        report_index = generate_report(
-            report_dir=path_cfg.get("report_dir", f"{s.BASE_VARIANT_OUTPUT_DIR}report"),
-            signal_file_path=path_cfg.get("signal_input", path_cfg.get("signal_output", s.SIGNAL_OUTPUT)),
-            mc_file_path=path_cfg.get("mc_input", path_cfg.get("mc_output", s.MC_FILENAME)),
-            systematics_file_path=path_cfg.get("systematics_input", path_cfg.get("systematics_output", s.SYSTEMATICS_OUTPUT)),
-            metadata_path=path_cfg.get("metadata_output", "run_metadata.json"),
-            species=str(run_cfg.get("report_species", "antihe3")),
-            sections=list(report_cfg.get("sections", [])),
-            fit_n_parameters=int(report_cfg.get("fit_n_parameters", 6)),
-            fit_alpha=float(report_cfg.get("fit_alpha", 0.05)),
-            fit_tail=str(report_cfg.get("fit_tail", "single")),
-            tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
-            data_file_path=path_cfg.get("data_input", path_cfg.get("data_output", s.DATA_FILENAME)),
-        )
-        LOGGER.info("Report generated: %s", report_index)
+        report_mode = str(run_cfg.get("report_mode", "single")).lower()
+        root_report_dir = path_cfg.get("report_dir", f"{s.BASE_VARIANT_OUTPUT_DIR}report")
+        if report_mode == "dual":
+            species_list = list(run_cfg.get("report_species_dual", ["antihe3", "antihe4"]))
+            labels = ["he3", "he4"]
+            entries = []
+            for i, species_name in enumerate(species_list[:2]):
+                label = labels[i] if i < len(labels) else f"species{i + 1}"
+                sub_report_dir = f"{root_report_dir}/{label}"
+                report_index = generate_report(
+                    report_dir=sub_report_dir,
+                    signal_file_path=path_cfg.get(f"signal_input_{label}", path_cfg.get("signal_input", path_cfg.get("signal_output", s.SIGNAL_OUTPUT))),
+                    mc_file_path=path_cfg.get(f"mc_input_{label}", path_cfg.get(f"mc_output_{label}", path_cfg.get("mc_input", path_cfg.get("mc_output", s.MC_FILENAME)))),
+                    systematics_file_path=path_cfg.get(f"systematics_input_{label}", path_cfg.get("systematics_input", path_cfg.get("systematics_output", s.SYSTEMATICS_OUTPUT))),
+                    metadata_path=path_cfg.get(f"metadata_output_{label}", path_cfg.get("metadata_output", "run_metadata.json")),
+                    species=str(species_name),
+                    sections=list(report_cfg.get("sections", [])),
+                    fit_n_parameters=int(report_cfg.get("fit_n_parameters", 6)),
+                    fit_alpha=float(report_cfg.get("fit_alpha", 0.05)),
+                    fit_tail=str(report_cfg.get("fit_tail", "single")),
+                    tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
+                    data_file_path=path_cfg.get(f"data_input_{label}", path_cfg.get(f"data_output_{label}", path_cfg.get("data_input", path_cfg.get("data_output", s.DATA_FILENAME)))),
+                )
+                entries.append({"label": label.upper(), "species": str(species_name), "href": f"{label}/index.html", "path": report_index})
+                LOGGER.info("Subreport generated [%s]: %s", label, report_index)
+            dual_index = generate_dual_report_index(
+                report_dir=root_report_dir,
+                entries=entries,
+                metadata_path=path_cfg.get("metadata_output", "run_metadata.json"),
+            )
+            LOGGER.info("Dual report index generated: %s", dual_index)
+        else:
+            report_index = generate_report(
+                report_dir=root_report_dir,
+                signal_file_path=path_cfg.get("signal_input", path_cfg.get("signal_output", s.SIGNAL_OUTPUT)),
+                mc_file_path=path_cfg.get("mc_input", path_cfg.get("mc_output", s.MC_FILENAME)),
+                systematics_file_path=path_cfg.get("systematics_input", path_cfg.get("systematics_output", s.SYSTEMATICS_OUTPUT)),
+                metadata_path=path_cfg.get("metadata_output", "run_metadata.json"),
+                species=str(run_cfg.get("report_species", "antihe3")),
+                sections=list(report_cfg.get("sections", [])),
+                fit_n_parameters=int(report_cfg.get("fit_n_parameters", 6)),
+                fit_alpha=float(report_cfg.get("fit_alpha", 0.05)),
+                fit_tail=str(report_cfg.get("fit_tail", "single")),
+                tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
+                data_file_path=path_cfg.get("data_input", path_cfg.get("data_output", s.DATA_FILENAME)),
+            )
+            LOGGER.info("Report generated: %s", report_index)
     elif task == "full_chain":
         tasks.analyse_data(path_cfg.get("data_tree", s.DATA_TREE_FILENAME), path_cfg.get("data_output", s.DATA_FILENAME), particle, bool(run_cfg.get("skim", False)), draw)
         tasks.analyse_mc(path_cfg.get("mc_tree", s.MC_TREE_FILENAME), path_cfg.get("mc_output", s.MC_FILENAME), particle, bool(run_cfg.get("enable_trials", True)), draw)

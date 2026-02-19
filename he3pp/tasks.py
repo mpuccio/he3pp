@@ -16,14 +16,36 @@ def _weighted_eff_name(base: str) -> str:
     return f"W{base}"
 
 
-def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = False, draw: bool = False) -> None:
-    LOGGER.info("analyse_data start particle=%s input=%s output=%s", particle, input_file, output_file)
-    ROOT.gStyle.SetOptStat(0)
-    rdf = ROOT.RDataFrame("O2nucleitable", expand(input_file))
-    df_base = define_columns_for_data(rdf)
+def _collect_rresult_ptrs(obj: Any) -> list[Any]:
+    out: list[Any] = []
+    if isinstance(obj, dict):
+        for v in obj.values():
+            out.extend(_collect_rresult_ptrs(v))
+        return out
+    if isinstance(obj, (list, tuple)):
+        for v in obj:
+            out.extend(_collect_rresult_ptrs(v))
+        return out
+    if hasattr(obj, "GetValue") and hasattr(obj, "GetPtr"):
+        out.append(obj)
+    return out
 
+
+def _run_graphs(actions: list[Any]) -> None:
+    if not actions:
+        return
+    run_graphs = getattr(getattr(ROOT, "RDF", None), "RunGraphs", None)
+    if run_graphs:
+        run_graphs(actions)
+        return
+    # Fallback for ROOT builds without RunGraphs.
+    for action in actions:
+        action.GetValue()
+
+
+def _book_data_species(df_all: Any, particle: str, skim: bool = False, tag: str = "") -> dict[str, Any]:
     if particle == "he4":
-        df_base = df_base.Filter(HE4_BASE_SELECTION)
+        df_base = df_all.Filter(HE4_BASE_SELECTION)
         df_primary = df_base.Filter(HE4_PRIMARY_SELECTION)
         df_secondary = df_base.Filter(SECONDARY_SELECTION)
         nsigma = "nsigmaHe4"
@@ -31,10 +53,10 @@ def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = 
         pt_name = "ptHe4"
         dmass = "deltaMassHe4"
         nominal_mass = 3.72738
-        tpc_anti_model = ROOT.RDF.TH2DModel("fATPCcounts", ";#it{p}_{T}^{rec} (GeV/#it{c});^{4}#bar{He} n#sigma_{TPC};Counts", 160, 0.5, 4.5, 100, -5, 5)
-        tpc_mat_model = h2_model("fMTPCcounts", ";#it{p}_{T}^{rec} (GeV/#it{c});^{4}He n#sigma_{TPC};Counts", 100, -5, 5)
+        tpc_anti_model = ROOT.RDF.TH2DModel(f"fATPCcounts{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});^{4}#bar{He} n#sigma_{TPC};Counts", 160, 0.5, 4.5, 100, -5, 5)
+        tpc_mat_model = ROOT.RDF.TH2DModel(f"fMTPCcounts{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});^{4}He n#sigma_{TPC};Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -5, 5)
     else:
-        df_base = df_base.Filter(BASE_REC_SELECTIONS)
+        df_base = df_all.Filter(BASE_REC_SELECTIONS)
         df_primary = df_base.Filter(DEFAULT_REC_SELECTIONS)
         df_secondary = df_base.Filter(SECONDARY_SELECTION)
         nsigma = "nsigmaHe3"
@@ -42,8 +64,8 @@ def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = 
         pt_name = "pt"
         dmass = "deltaMassHe3"
         nominal_mass = 2.80839
-        tpc_anti_model = h2_model("fATPCcounts", ";#it{p}_{T}^{rec} (GeV/#it{c});^{3}#bar{He} n#sigma_{TPC};Counts", 100, -5, 5)
-        tpc_mat_model = h2_model("fMTPCcounts", ";#it{p}_{T}^{rec} (GeV/#it{c});^{3}He n#sigma_{TPC};Counts", 100, -5, 5)
+        tpc_anti_model = ROOT.RDF.TH2DModel(f"fATPCcounts{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});^{3}#bar{He} n#sigma_{TPC};Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -5, 5)
+        tpc_mat_model = ROOT.RDF.TH2DModel(f"fMTPCcounts{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});^{3}He n#sigma_{TPC};Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -5, 5)
 
     if skim:
         df_base.Filter(SKIM_SELECTION_TEMPLATE.format(nsigma=nsigma)).Snapshot("nucleiTree", "data/skimmed.root")
@@ -56,9 +78,9 @@ def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = 
     h_tof: dict[str, list[Any]] = {}
 
     for label, matter_sel in matter_map.items():
-        h_dca_xy[label] = [df_primary.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model(f"hDCAxy{label}He", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", 100, -0.2, 0.2), pt_name, "fDCAxy")]
-        h_dca_z[label] = [df_primary.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model(f"hDCAz{label}He", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{z} (cm);Counts", 100, -0.2, 0.2), pt_name, "fDCAz")]
-        h_dca_xy_secondary[label] = [df_secondary.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model(f"hDCAxySecondary{label}He", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", 100, -0.2, 0.2), pt_name, "fDCAxy")]
+        h_dca_xy[label] = [df_primary.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(ROOT.RDF.TH2DModel(f"hDCAxy{label}He{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -0.2, 0.2), pt_name, "fDCAxy")]
+        h_dca_z[label] = [df_primary.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(ROOT.RDF.TH2DModel(f"hDCAz{label}He{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{z} (cm);Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -0.2, 0.2), pt_name, "fDCAz")]
+        h_dca_xy_secondary[label] = [df_secondary.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(ROOT.RDF.TH2DModel(f"hDCAxySecondary{label}He{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -0.2, 0.2), pt_name, "fDCAxy")]
 
         tpc_sel = f"{matter_sel} && {mass_cut}" if particle == "he3" else matter_sel
         tpc_model = tpc_anti_model if label == "A" else tpc_mat_model
@@ -69,10 +91,9 @@ def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = 
     for label, matter_sel in matter_map.items():
         isotope = "4" if particle == "he4" else "3"
         species_label = f"^{{{isotope}}}#bar{{He}}" if label == "A" else f"^{{{isotope}}}He"
-        h_tof[label] = [df_primary.Filter(f"{matter_sel} && std::abs({nsigma}) < {nsigma_tof_cut}").Histo2D(h2_model(f"f{label}TOFsignal", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});m_{{TOF}}-m_{{{species_label}}};Counts", 100, -0.9, 1.1), pt_name, dmass)]
+        h_tof[label] = [df_primary.Filter(f"{matter_sel} && std::abs({nsigma}) < {nsigma_tof_cut}").Histo2D(ROOT.RDF.TH2DModel(f"f{label}TOFsignal{tag}", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});m_{{TOF}}-m_{{{species_label}}};Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -0.9, 1.1), pt_name, dmass)]
 
-    # Build the TOF delta-mass axis explicitly for the reporting 2D maps.
-    df_primary = df_primary.Define("tofMassDeltaPOI", f"tofMass - {nominal_mass}")
+    df_primary = df_primary.Define(f"tofMassDeltaPOI{tag}", f"tofMass - {nominal_mass}")
     tof_delta_mass_range = (-0.6, 0.6) if particle == "he4" else (-1.0, 1.0)
     h_tof_mass_vs_tpc_nsigma: dict[str, list[Any]] = {"A": [], "M": []}
     for i_pt in range(N_PT_BINS):
@@ -80,11 +101,9 @@ def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = 
         pt_high = PT_BINS[i_pt + 1]
         for label, matter_sel in matter_map.items():
             h_tof_mass_vs_tpc_nsigma[label].append(
-                df_primary.Filter(
-                    f"{matter_sel} && hasTOF && std::abs({nsigma}) < 6 && {pt_name} >= {pt_low} && {pt_name} < {pt_high}"
-                ).Histo2D(
+                df_primary.Filter(f"{matter_sel} && hasTOF && std::abs({nsigma}) < 6 && {pt_name} >= {pt_low} && {pt_name} < {pt_high}").Histo2D(
                     ROOT.RDF.TH2DModel(
-                        f"hTOFMassVsTPCnsigma{label}_pt{i_pt:02d}",
+                        f"hTOFMassVsTPCnsigma{label}_pt{i_pt:02d}{tag}",
                         ";n#sigma_{TPC};m_{TOF}-m_{0} (GeV/#it{c}^{2});Counts",
                         120,
                         -6.0,
@@ -94,7 +113,7 @@ def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = 
                         tof_delta_mass_range[1],
                     ),
                     nsigma,
-                    "tofMassDeltaPOI",
+                    f"tofMassDeltaPOI{tag}",
                 )
             )
 
@@ -108,19 +127,73 @@ def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = 
                     df_its = df_tpc.Filter(f"nITScls >= {cut_its}")
                     for label, matter_sel in matter_map.items():
                         species_label = "^{3}#bar{He}" if label == "A" else "^{3}He"
-                        h_dca_xy[label].append(df_its.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model(f"hDCAxy{label}He3{i_trial}", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", 560, -0.7, 0.7), pt_name, "fDCAxy"))
-                        h_dca_z[label].append(df_its.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model(f"hDCAz{label}He3{i_trial}", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{z} (cm);Counts", 560, -0.7, 0.7), pt_name, "fDCAz"))
-                        h_tpc[label].append(df_its.Filter(f"{matter_sel} && {HE3_TRIAL_DCA_SELECTION} && {mass_cut}").Histo2D(h2_model(f"f{label}TPCcounts{i_trial}", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});{species_label} n#sigma_{{TPC}};Counts", 100, -5, 5), pt_name, nsigma))
-                        h_tof[label].append(df_its.Filter(f"{matter_sel} && {HE3_TRIAL_DCA_SELECTION} && std::abs({nsigma}) < {HE3_NSIGMA_TOF_CUT}").Histo2D(h2_model(f"f{label}TOFsignal{i_trial}", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});m_{{TOF}}-m_{{{species_label}}};Counts", 100, -0.9, 1.1), pt_name, dmass))
+                        h_dca_xy[label].append(df_its.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(ROOT.RDF.TH2DModel(f"hDCAxy{label}He3{i_trial}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", N_PT_BINS, PT_BIN_ARRAY, 560, -0.7, 0.7), pt_name, "fDCAxy"))
+                        h_dca_z[label].append(df_its.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(ROOT.RDF.TH2DModel(f"hDCAz{label}He3{i_trial}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{z} (cm);Counts", N_PT_BINS, PT_BIN_ARRAY, 560, -0.7, 0.7), pt_name, "fDCAz"))
+                        h_tpc[label].append(df_its.Filter(f"{matter_sel} && {HE3_TRIAL_DCA_SELECTION} && {mass_cut}").Histo2D(ROOT.RDF.TH2DModel(f"f{label}TPCcounts{i_trial}{tag}", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});{species_label} n#sigma_{{TPC}};Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -5, 5), pt_name, nsigma))
+                        h_tof[label].append(df_its.Filter(f"{matter_sel} && {HE3_TRIAL_DCA_SELECTION} && std::abs({nsigma}) < {HE3_NSIGMA_TOF_CUT}").Histo2D(ROOT.RDF.TH2DModel(f"f{label}TOFsignal{i_trial}{tag}", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});m_{{TOF}}-m_{{{species_label}}};Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -0.9, 1.1), pt_name, dmass))
                     i_trial += 1
 
+    return {
+        "particle": particle,
+        "h_tpc": h_tpc,
+        "h_tof": h_tof,
+        "h_dca_xy": h_dca_xy,
+        "h_dca_z": h_dca_z,
+        "h_dca_xy_secondary": h_dca_xy_secondary,
+        "h_tof_mass_vs_tpc_nsigma": h_tof_mass_vs_tpc_nsigma,
+        "i_trial": i_trial,
+    }
+
+
+def _write_data_bundle(bundle: dict[str, Any], output_file: str) -> None:
+    output_file = expand(output_file)
+    ensure_parent(output_file)
+    out = ROOT.TFile(output_file, "recreate")
+    d0 = out.mkdir("nuclei")
+    d0.cd()
+    for label in ("A", "M"):
+        write_hist(bundle["h_tpc"][label][0], f"f{label}TPCcounts")
+        write_hist(bundle["h_tof"][label][0], f"f{label}TOFsignal")
+        write_hist(bundle["h_dca_xy"][label][0], f"hDCAxy{label}He3")
+        write_hist(bundle["h_dca_z"][label][0], f"hDCAz{label}He3")
+    for label in ("M", "A"):
+        write_hist(bundle["h_dca_xy_secondary"][label][0], f"hDCAxySecondary{label}He3")
+    for i_pt in range(N_PT_BINS):
+        for label in ("A", "M"):
+            write_hist(bundle["h_tof_mass_vs_tpc_nsigma"][label][i_pt], f"hTOFMassVsTPCnsigma{label}_pt{i_pt:02d}")
+
+    for idx in range(bundle["i_trial"]):
+        dtrial = out.mkdir(f"nuclei{idx}")
+        dtrial.cd()
+        for label in ("A", "M"):
+            write_hist(bundle["h_tpc"][label][idx + 1], f"f{label}TPCcounts")
+            write_hist(bundle["h_tof"][label][idx + 1], f"f{label}TOFsignal")
+            write_hist(bundle["h_dca_xy"][label][idx + 1], f"hDCAxy{label}He3")
+            write_hist(bundle["h_dca_z"][label][idx + 1], f"hDCAz{label}He3")
+    out.Close()
+
+
+def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = False, draw: bool = False) -> None:
+    LOGGER.info("analyse_data start particle=%s input=%s output=%s", particle, input_file, output_file)
+    ROOT.gStyle.SetOptStat(0)
+    rdf = ROOT.RDataFrame("O2nucleitable", expand(input_file))
+    df_all = define_columns_for_data(rdf)
+    bundle = _book_data_species(df_all, particle, skim=skim, tag=f"_{particle}")
+    _run_graphs(
+        _collect_rresult_ptrs(bundle["h_tpc"])
+        + _collect_rresult_ptrs(bundle["h_tof"])
+        + _collect_rresult_ptrs(bundle["h_dca_xy"])
+        + _collect_rresult_ptrs(bundle["h_dca_z"])
+        + _collect_rresult_ptrs(bundle["h_dca_xy_secondary"])
+        + _collect_rresult_ptrs(bundle["h_tof_mass_vs_tpc_nsigma"])
+    )
     if draw:
         draw_order = [
-            (h_tpc, ("A", "M")),
-            (h_tof, ("A", "M")),
-            (h_dca_xy, ("A", "M")),
-            (h_dca_z, ("A", "M")),
-            (h_dca_xy_secondary, ("M", "A")),
+            (bundle["h_tpc"], ("A", "M")),
+            (bundle["h_tof"], ("A", "M")),
+            (bundle["h_dca_xy"], ("A", "M")),
+            (bundle["h_dca_z"], ("A", "M")),
+            (bundle["h_dca_xy_secondary"], ("M", "A")),
         ]
         for hist_map, labels in draw_order:
             for label in labels:
@@ -128,41 +201,47 @@ def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = 
                 c = ROOT.TCanvas()
                 c.SetRightMargin(0.15)
                 hist.DrawClone("colz")
-
-    output_file = expand(output_file)
-    ensure_parent(output_file)
-    out = ROOT.TFile(output_file, "recreate")
-    d0 = out.mkdir("nuclei")
-    d0.cd()
-    for label in ("A", "M"):
-        write_hist(h_tpc[label][0], f"f{label}TPCcounts")
-        write_hist(h_tof[label][0], f"f{label}TOFsignal")
-        write_hist(h_dca_xy[label][0], f"hDCAxy{label}He3")
-        write_hist(h_dca_z[label][0], f"hDCAz{label}He3")
-    for label in ("M", "A"):
-        write_hist(h_dca_xy_secondary[label][0], f"hDCAxySecondary{label}He3")
-    for i_pt in range(N_PT_BINS):
-        for label in ("A", "M"):
-            write_hist(h_tof_mass_vs_tpc_nsigma[label][i_pt], f"hTOFMassVsTPCnsigma{label}_pt{i_pt:02d}")
-
-    for idx in range(i_trial):
-        dtrial = out.mkdir(f"nuclei{idx}")
-        dtrial.cd()
-        for label in ("A", "M"):
-            write_hist(h_tpc[label][idx + 1], f"f{label}TPCcounts")
-            write_hist(h_tof[label][idx + 1], f"f{label}TOFsignal")
-            write_hist(h_dca_xy[label][idx + 1], f"hDCAxy{label}He3")
-            write_hist(h_dca_z[label][idx + 1], f"hDCAz{label}He3")
-    out.Close()
+    _write_data_bundle(bundle, output_file)
     LOGGER.info("analyse_data done output=%s", output_file)
 
 
-def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: bool, draw: bool = False) -> None:
-    LOGGER.info("analyse_mc start particle=%s input=%s output=%s", particle, input_file, output_file)
+def analyse_data_dual(input_file: str, he3_output_file: str, he4_output_file: str, skim: bool = False, draw: bool = False) -> None:
+    LOGGER.info("analyse_data_dual start input=%s he3_out=%s he4_out=%s", input_file, he3_output_file, he4_output_file)
     ROOT.gStyle.SetOptStat(0)
-    rdf = ROOT.RDataFrame("O2nucleitablemc", expand(input_file))
-    df_data = define_columns_for_data(rdf)
+    rdf = ROOT.RDataFrame("O2nucleitable", expand(input_file))
+    df_all = define_columns_for_data(rdf)
+    bundle_he3 = _book_data_species(df_all, "he3", skim=skim, tag="_he3")
+    bundle_he4 = _book_data_species(df_all, "he4", skim=False, tag="_he4")
+    _run_graphs(
+        _collect_rresult_ptrs(bundle_he3["h_tpc"])
+        + _collect_rresult_ptrs(bundle_he3["h_tof"])
+        + _collect_rresult_ptrs(bundle_he3["h_dca_xy"])
+        + _collect_rresult_ptrs(bundle_he3["h_dca_z"])
+        + _collect_rresult_ptrs(bundle_he3["h_dca_xy_secondary"])
+        + _collect_rresult_ptrs(bundle_he3["h_tof_mass_vs_tpc_nsigma"])
+        + _collect_rresult_ptrs(bundle_he4["h_tpc"])
+        + _collect_rresult_ptrs(bundle_he4["h_tof"])
+        + _collect_rresult_ptrs(bundle_he4["h_dca_xy"])
+        + _collect_rresult_ptrs(bundle_he4["h_dca_z"])
+        + _collect_rresult_ptrs(bundle_he4["h_dca_xy_secondary"])
+        + _collect_rresult_ptrs(bundle_he4["h_tof_mass_vs_tpc_nsigma"])
+    )
+    if draw:
+        for bundle in (bundle_he3, bundle_he4):
+            for hist_map, labels in (
+                (bundle["h_tpc"], ("A", "M")),
+                (bundle["h_tof"], ("A", "M")),
+            ):
+                for label in labels:
+                    c = ROOT.TCanvas()
+                    c.SetRightMargin(0.15)
+                    hist_map[label][0].DrawClone("colz")
+    _write_data_bundle(bundle_he3, he3_output_file)
+    _write_data_bundle(bundle_he4, he4_output_file)
+    LOGGER.info("analyse_data_dual done he3_out=%s he4_out=%s", he3_output_file, he4_output_file)
 
+
+def _book_mc_species(df_data: Any, particle: str, enable_trials: bool, tag: str = "") -> dict[str, Any]:
     if particle == "he4":
         df = (
             df_data.Define("gP", "fgPt * std::cosh(fgEta)")
@@ -178,23 +257,23 @@ def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: 
         )
         df_cut_reco = df.Filter(HE4_MC_RECO_SELECTION)
         df_cut_gen = df.Filter(HE4_MC_GEN_SELECTION)
-        h_delta_pt = df_cut_reco.Histo2D(ROOT.RDF.TH2DModel("hDeltaPtHe4", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 100, 0, 5, 120, -0.4, 0.2), "ptUncorr", "deltaPtUncorrected")
-        h_delta_pt_corr = df_cut_reco.Histo2D(ROOT.RDF.TH2DModel("hDeltaPtCorrHe4", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 100, 0, 5, 100, -0.4, 0.2), "pt", "deltaPt")
-        h_mom_res = df_cut_reco.Histo2D(ROOT.RDF.TH2DModel("hMomResHe4", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 44, 0.9, 5.3, 80, -0.2, 0.2), "pt", "deltaPt")
+        h_delta_pt = df_cut_reco.Histo2D(ROOT.RDF.TH2DModel(f"hDeltaPtHe4{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 100, 0, 5, 120, -0.4, 0.2), "ptUncorr", "deltaPtUncorrected")
+        h_delta_pt_corr = df_cut_reco.Histo2D(ROOT.RDF.TH2DModel(f"hDeltaPtCorrHe4{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 100, 0, 5, 100, -0.4, 0.2), "pt", "deltaPt")
+        h_mom_res = df_cut_reco.Histo2D(ROOT.RDF.TH2DModel(f"hMomResHe4{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 44, 0.9, 5.3, 80, -0.2, 0.2), "pt", "deltaPt")
 
-        h_reco_tpc_a = [df_cut_reco.Filter(f"!matter && {HE4_MC_SIGNAL_TRACKING}").Histo1D(h1_model("TPCAHe4", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
-        h_reco_tpc_m = [df_cut_reco.Filter(f"matter && {HE4_MC_SIGNAL_TRACKING}").Histo1D(h1_model("TPCMHe4", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
-        h_reco_tof_a = [df_cut_reco.Filter(f"!matter && {HE4_MC_SIGNAL_TRACKING} && hasTOF").Histo1D(h1_model("TOFAHe4", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
-        h_reco_tof_m = [df_cut_reco.Filter(f"matter && {HE4_MC_SIGNAL_TRACKING} && hasTOF").Histo1D(h1_model("TOFMHe4", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
-        h_gen_a = [df_cut_gen.Filter("fPDGcode < 0").Histo1D(h1_model("genAHe4", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt")]
-        h_gen_m = [df_cut_gen.Filter("fPDGcode > 0").Histo1D(h1_model("genMHe4", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt")]
+        h_reco_tpc_a = [df_cut_reco.Filter(f"!matter && {HE4_MC_SIGNAL_TRACKING}").Histo1D(h1_model(f"TPCAHe4{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
+        h_reco_tpc_m = [df_cut_reco.Filter(f"matter && {HE4_MC_SIGNAL_TRACKING}").Histo1D(h1_model(f"TPCMHe4{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
+        h_reco_tof_a = [df_cut_reco.Filter(f"!matter && {HE4_MC_SIGNAL_TRACKING} && hasTOF").Histo1D(h1_model(f"TOFAHe4{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
+        h_reco_tof_m = [df_cut_reco.Filter(f"matter && {HE4_MC_SIGNAL_TRACKING} && hasTOF").Histo1D(h1_model(f"TOFMHe4{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
+        h_gen_a = [df_cut_gen.Filter("fPDGcode < 0").Histo1D(h1_model(f"genAHe4{tag}", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt")]
+        h_gen_m = [df_cut_gen.Filter("fPDGcode > 0").Histo1D(h1_model(f"genMHe4{tag}", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt")]
 
-        h_reco_tpc_a_w = [df_cut_reco.Filter(f"!matter && {HE4_MC_SIGNAL_TRACKING}").Histo1D(h1_model("TPCAHe4W", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
-        h_reco_tpc_m_w = [df_cut_reco.Filter(f"matter && {HE4_MC_SIGNAL_TRACKING}").Histo1D(h1_model("TPCMHe4W", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
-        h_reco_tof_a_w = [df_cut_reco.Filter(f"!matter && {HE4_MC_SIGNAL_TRACKING} && hasTOF").Histo1D(h1_model("TOFAHe4W", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
-        h_reco_tof_m_w = [df_cut_reco.Filter(f"matter && {HE4_MC_SIGNAL_TRACKING} && hasTOF").Histo1D(h1_model("TOFMHe4W", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
-        h_gen_a_w = [df_cut_gen.Filter("fPDGcode < 0").Histo1D(h1_model("genAHe4W", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt", "ptWeight")]
-        h_gen_m_w = [df_cut_gen.Filter("fPDGcode > 0").Histo1D(h1_model("genMHe4W", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt", "ptWeight")]
+        h_reco_tpc_a_w = [df_cut_reco.Filter(f"!matter && {HE4_MC_SIGNAL_TRACKING}").Histo1D(h1_model(f"TPCAHe4W{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
+        h_reco_tpc_m_w = [df_cut_reco.Filter(f"matter && {HE4_MC_SIGNAL_TRACKING}").Histo1D(h1_model(f"TPCMHe4W{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
+        h_reco_tof_a_w = [df_cut_reco.Filter(f"!matter && {HE4_MC_SIGNAL_TRACKING} && hasTOF").Histo1D(h1_model(f"TOFAHe4W{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
+        h_reco_tof_m_w = [df_cut_reco.Filter(f"matter && {HE4_MC_SIGNAL_TRACKING} && hasTOF").Histo1D(h1_model(f"TOFMHe4W{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
+        h_gen_a_w = [df_cut_gen.Filter("fPDGcode < 0").Histo1D(h1_model(f"genAHe4W{tag}", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt", "ptWeight")]
+        h_gen_m_w = [df_cut_gen.Filter("fPDGcode > 0").Histo1D(h1_model(f"genMHe4W{tag}", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt", "ptWeight")]
 
         reco_df_for_trials = df_cut_reco
         tpc_name = "He4"
@@ -214,23 +293,23 @@ def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: 
         df_cut_reco_base = df.Filter(BASE_REC_SELECTIONS + HE3_MC_RECO_APPEND)
         df_cut_reco = df_cut_reco_base.Filter(DEFAULT_REC_SELECTIONS)
         df_cut_gen = df.Filter(HE3_MC_GEN_SELECTION)
-        h_delta_pt = df_cut_reco.Histo2D(ROOT.RDF.TH2DModel("hDeltaPtHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 100, 0, 5, 120, -0.4, 0.2), "pt", "deltaPtUncorrected")
-        h_delta_pt_corr = df_cut_reco.Histo2D(ROOT.RDF.TH2DModel("hDeltaPtCorrHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 100, 0, 5, 100, -0.4, 0.2), "pt", "deltaPt")
-        h_mom_res = df_cut_reco.Histo2D(ROOT.RDF.TH2DModel("hMomResHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 44, 0.9, 5.3, 80, -0.2, 0.2), "pt", "deltaPt")
+        h_delta_pt = df_cut_reco.Histo2D(ROOT.RDF.TH2DModel(f"hDeltaPtHe3{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 100, 0, 5, 120, -0.4, 0.2), "pt", "deltaPtUncorrected")
+        h_delta_pt_corr = df_cut_reco.Histo2D(ROOT.RDF.TH2DModel(f"hDeltaPtCorrHe3{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 100, 0, 5, 100, -0.4, 0.2), "pt", "deltaPt")
+        h_mom_res = df_cut_reco.Histo2D(ROOT.RDF.TH2DModel(f"hMomResHe3{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});#it{p}_{T}^{rec}-#it{p}_{T}^{gen} (GeV/#it{c})", 44, 0.9, 5.3, 80, -0.2, 0.2), "pt", "deltaPt")
 
-        h_reco_tpc_a = [df_cut_reco.Filter("!matter").Histo1D(h1_model("TPCAHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
-        h_reco_tpc_m = [df_cut_reco.Filter("matter").Histo1D(h1_model("TPCMHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
-        h_reco_tof_a = [df_cut_reco.Filter("!matter && hasTOF").Histo1D(h1_model("TOFAHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
-        h_reco_tof_m = [df_cut_reco.Filter("matter && hasTOF").Histo1D(h1_model("TOFMHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
-        h_gen_a = [df_cut_gen.Filter("fPDGcode < 0").Histo1D(h1_model("genAHe3", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt")]
-        h_gen_m = [df_cut_gen.Filter("fPDGcode > 0").Histo1D(h1_model("genMHe3", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt")]
+        h_reco_tpc_a = [df_cut_reco.Filter("!matter").Histo1D(h1_model(f"TPCAHe3{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
+        h_reco_tpc_m = [df_cut_reco.Filter("matter").Histo1D(h1_model(f"TPCMHe3{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
+        h_reco_tof_a = [df_cut_reco.Filter("!matter && hasTOF").Histo1D(h1_model(f"TOFAHe3{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
+        h_reco_tof_m = [df_cut_reco.Filter("matter && hasTOF").Histo1D(h1_model(f"TOFMHe3{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
+        h_gen_a = [df_cut_gen.Filter("fPDGcode < 0").Histo1D(h1_model(f"genAHe3{tag}", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt")]
+        h_gen_m = [df_cut_gen.Filter("fPDGcode > 0").Histo1D(h1_model(f"genMHe3{tag}", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt")]
 
-        h_reco_tpc_a_w = [df_cut_reco.Filter("!matter").Histo1D(h1_model("TPCAHe3W", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
-        h_reco_tpc_m_w = [df_cut_reco.Filter("matter").Histo1D(h1_model("TPCMHe3W", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
-        h_reco_tof_a_w = [df_cut_reco.Filter("!matter && hasTOF").Histo1D(h1_model("TOFAHe3W", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
-        h_reco_tof_m_w = [df_cut_reco.Filter("matter && hasTOF").Histo1D(h1_model("TOFMHe3W", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
-        h_gen_a_w = [df_cut_gen.Filter("fPDGcode < 0").Histo1D(h1_model("genAHe3W", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt", "ptWeight")]
-        h_gen_m_w = [df_cut_gen.Filter("fPDGcode > 0").Histo1D(h1_model("genMHe3W", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt", "ptWeight")]
+        h_reco_tpc_a_w = [df_cut_reco.Filter("!matter").Histo1D(h1_model(f"TPCAHe3W{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
+        h_reco_tpc_m_w = [df_cut_reco.Filter("matter").Histo1D(h1_model(f"TPCMHe3W{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
+        h_reco_tof_a_w = [df_cut_reco.Filter("!matter && hasTOF").Histo1D(h1_model(f"TOFAHe3W{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
+        h_reco_tof_m_w = [df_cut_reco.Filter("matter && hasTOF").Histo1D(h1_model(f"TOFMHe3W{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
+        h_gen_a_w = [df_cut_gen.Filter("fPDGcode < 0").Histo1D(h1_model(f"genAHe3W{tag}", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt", "ptWeight")]
+        h_gen_m_w = [df_cut_gen.Filter("fPDGcode > 0").Histo1D(h1_model(f"genMHe3W{tag}", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt", "ptWeight")]
 
         reco_df_for_trials = df_cut_reco_base
         tpc_name = "He3"
@@ -253,41 +332,74 @@ def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: 
                 for cut_its in CUT_NAMES["nITScls"]:
                     _ = d_tpc.Filter(f"nITScls >= {cut_its}")
                     for label, matter_sel in matter_map.items():
-                        h_reco_tpc[label].append(reco_df_for_trials.Filter(matter_sel).Histo1D(h1_model(f"TPC{label}{tpc_name}{n_trials}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt"))
-                        h_reco_tof[label].append(reco_df_for_trials.Filter(f"{matter_sel} && hasTOF").Histo1D(h1_model(f"TOF{label}{tpc_name}{n_trials}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt"))
-                        h_reco_tpc_w[label].append(reco_df_for_trials.Filter(matter_sel).Histo1D(h1_model(f"TPC{label}{tpc_name}W{n_trials}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight"))
-                        h_reco_tof_w[label].append(reco_df_for_trials.Filter(f"{matter_sel} && hasTOF").Histo1D(h1_model(f"TOF{label}{tpc_name}W{n_trials}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight"))
+                        h_reco_tpc[label].append(reco_df_for_trials.Filter(matter_sel).Histo1D(h1_model(f"TPC{label}{tpc_name}{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt"))
+                        h_reco_tof[label].append(reco_df_for_trials.Filter(f"{matter_sel} && hasTOF").Histo1D(h1_model(f"TOF{label}{tpc_name}{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt"))
+                        h_reco_tpc_w[label].append(reco_df_for_trials.Filter(matter_sel).Histo1D(h1_model(f"TPC{label}{tpc_name}W{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight"))
+                        h_reco_tof_w[label].append(reco_df_for_trials.Filter(f"{matter_sel} && hasTOF").Histo1D(h1_model(f"TOF{label}{tpc_name}W{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight"))
                     n_trials += 1
 
-    if draw:
-        c = ROOT.TCanvas("effMatterAntiMatter", "effMatterAntiMatter")
-        c.cd()
-        h_eff = {}
-        for label in ("A", "M"):
-            h_eff[label] = h_reco_tpc[label][0].GetValue().Clone(f"hEff{label}")
-            h_eff[label].Divide(h_reco_tpc[label][0].GetPtr(), h_gen[label][0].GetPtr(), 1.0, 1.0, "B")
-        h_eff["A"].SetLineColor(ROOT.kRed)
-        h_eff["A"].Draw()
-        h_eff["M"].Draw("same")
+    actions = (
+        _collect_rresult_ptrs(h_gen)
+        + _collect_rresult_ptrs(h_reco_tpc)
+        + _collect_rresult_ptrs(h_reco_tof)
+        + _collect_rresult_ptrs(h_gen_w)
+        + _collect_rresult_ptrs(h_reco_tpc_w)
+        + _collect_rresult_ptrs(h_reco_tof_w)
+        + _collect_rresult_ptrs([h_delta_pt, h_delta_pt_corr, h_mom_res])
+    )
 
+    return {
+        "particle": particle,
+        "tpc_name": tpc_name,
+        "gen_name": gen_name,
+        "h_gen": h_gen,
+        "h_reco_tpc": h_reco_tpc,
+        "h_reco_tof": h_reco_tof,
+        "h_gen_w": h_gen_w,
+        "h_reco_tpc_w": h_reco_tpc_w,
+        "h_reco_tof_w": h_reco_tof_w,
+        "h_delta_pt": h_delta_pt,
+        "h_delta_pt_corr": h_delta_pt_corr,
+        "h_mom_res": h_mom_res,
+        "n_trials": n_trials,
+        "actions": actions,
+    }
+
+
+def _draw_mc_eff(bundle: dict[str, Any], canvas_name: str) -> None:
+    c = ROOT.TCanvas(canvas_name, canvas_name)
+    c.cd()
+    h_eff = {}
+    for label in ("A", "M"):
+        h_eff[label] = bundle["h_reco_tpc"][label][0].GetValue().Clone(f"{canvas_name}_hEff{label}")
+        h_eff[label].Divide(bundle["h_reco_tpc"][label][0].GetPtr(), bundle["h_gen"][label][0].GetPtr(), 1.0, 1.0, "B")
+    h_eff["A"].SetLineColor(ROOT.kRed)
+    h_eff["A"].Draw()
+    h_eff["M"].Draw("same")
+
+
+def _write_mc_bundle(bundle: dict[str, Any], output_file: str) -> None:
     out_name = expand(output_file)
     ensure_parent(out_name)
     out = ROOT.TFile(out_name, "recreate")
     d0 = out.mkdir("nuclei")
     d0.cd()
 
-    for label in ("A", "M"):
-        write_hist(h_gen[label][0], f"gen{label}{gen_name}")
-        write_hist(h_reco_tpc[label][0], f"TPC{label}{tpc_name}")
-        write_hist(h_reco_tof[label][0], f"TOF{label}{tpc_name}")
-    write_hist(h_delta_pt, f"hDeltaPt{tpc_name}")
-    write_hist(h_delta_pt_corr, f"hDeltaPtCorr{tpc_name}")
-    write_hist(h_mom_res, f"hMomRes{tpc_name}")
+    tpc_name = bundle["tpc_name"]
+    gen_name = bundle["gen_name"]
 
     for label in ("A", "M"):
-        write_hist(h_gen_w[label][0], f"gen{label}{gen_name}W")
-        write_hist(h_reco_tpc_w[label][0], f"TPC{label}{tpc_name}W")
-        write_hist(h_reco_tof_w[label][0], f"TOF{label}{tpc_name}W")
+        write_hist(bundle["h_gen"][label][0], f"gen{label}{gen_name}")
+        write_hist(bundle["h_reco_tpc"][label][0], f"TPC{label}{tpc_name}")
+        write_hist(bundle["h_reco_tof"][label][0], f"TOF{label}{tpc_name}")
+    write_hist(bundle["h_delta_pt"], f"hDeltaPt{tpc_name}")
+    write_hist(bundle["h_delta_pt_corr"], f"hDeltaPtCorr{tpc_name}")
+    write_hist(bundle["h_mom_res"], f"hMomRes{tpc_name}")
+
+    for label in ("A", "M"):
+        write_hist(bundle["h_gen_w"][label][0], f"gen{label}{gen_name}W")
+        write_hist(bundle["h_reco_tpc_w"][label][0], f"TPC{label}{tpc_name}W")
+        write_hist(bundle["h_reco_tof_w"][label][0], f"TOF{label}{tpc_name}W")
 
     def write_eff(prefix: str, reco_tpc: dict[str, Any], reco_tof: dict[str, Any], gen: dict[str, Any], index: int) -> dict[str, Any]:
         eff_tpc = {}
@@ -302,34 +414,61 @@ def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: 
             eff_tof.Write(f"{prefix}effTOF{label}")
         return eff_tpc
 
-    write_eff("", h_reco_tpc, h_reco_tof, h_gen, 0)
-    write_eff(_weighted_eff_name(""), h_reco_tpc_w, h_reco_tof_w, h_gen_w, 0)
+    write_eff("", bundle["h_reco_tpc"], bundle["h_reco_tof"], bundle["h_gen"], 0)
+    write_eff(_weighted_eff_name(""), bundle["h_reco_tpc_w"], bundle["h_reco_tof_w"], bundle["h_gen_w"], 0)
 
-    for i in range(n_trials):
+    for i in range(bundle["n_trials"]):
         dtrial = out.mkdir(f"nuclei{i}")
         dtrial.cd()
         for label in ("A", "M"):
-            write_hist(h_gen[label][0], f"gen{label}{gen_name}")
-            write_hist(h_reco_tpc[label][i + 1], f"TPC{label}{tpc_name}")
-            write_hist(h_reco_tof[label][i + 1], f"TOF{label}{tpc_name}")
-            write_hist(h_gen_w[label][0], f"gen{label}{gen_name}W")
-            write_hist(h_reco_tpc_w[label][i + 1], f"TPC{label}{tpc_name}W")
-            write_hist(h_reco_tof_w[label][i + 1], f"TOF{label}{tpc_name}W")
+            write_hist(bundle["h_gen"][label][0], f"gen{label}{gen_name}")
+            write_hist(bundle["h_reco_tpc"][label][i + 1], f"TPC{label}{tpc_name}")
+            write_hist(bundle["h_reco_tof"][label][i + 1], f"TOF{label}{tpc_name}")
+            write_hist(bundle["h_gen_w"][label][0], f"gen{label}{gen_name}W")
+            write_hist(bundle["h_reco_tpc_w"][label][i + 1], f"TPC{label}{tpc_name}W")
+            write_hist(bundle["h_reco_tof_w"][label][i + 1], f"TOF{label}{tpc_name}W")
 
-        eff_tpc = write_eff("", h_reco_tpc, h_reco_tof, h_gen, i + 1)
+        eff_tpc = write_eff("", bundle["h_reco_tpc"], bundle["h_reco_tof"], bundle["h_gen"], i + 1)
         for label in ("A", "M"):
-            matching_tof = h_reco_tof[label][i + 1].GetValue().Clone(f"matchingTOF{label}{i}")
+            matching_tof = bundle["h_reco_tof"][label][i + 1].GetValue().Clone(f"matchingTOF{label}{i}")
             matching_tof.Divide(eff_tpc[label])
             matching_tof.Write()
 
-        eff_w_tpc = write_eff(_weighted_eff_name(""), h_reco_tpc_w, h_reco_tof_w, h_gen_w, i + 1)
+        eff_w_tpc = write_eff(_weighted_eff_name(""), bundle["h_reco_tpc_w"], bundle["h_reco_tof_w"], bundle["h_gen_w"], i + 1)
         for label in ("A", "M"):
-            matching_w_tof = h_reco_tof_w[label][i + 1].GetValue().Clone(f"matchingWTOF{label}{i}")
+            matching_w_tof = bundle["h_reco_tof_w"][label][i + 1].GetValue().Clone(f"matchingWTOF{label}{i}")
             matching_w_tof.Divide(eff_w_tpc[label])
             matching_w_tof.Write()
-
     out.Close()
+
+
+def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: bool, draw: bool = False) -> None:
+    LOGGER.info("analyse_mc start particle=%s input=%s output=%s", particle, input_file, output_file)
+    ROOT.gStyle.SetOptStat(0)
+    rdf = ROOT.RDataFrame("O2nucleitablemc", expand(input_file))
+    df_data = define_columns_for_data(rdf)
+    bundle = _book_mc_species(df_data, particle, enable_trials, tag=f"_{particle}")
+    _run_graphs(bundle["actions"])
+    if draw:
+        _draw_mc_eff(bundle, f"effMatterAntiMatter_{particle}")
+    _write_mc_bundle(bundle, output_file)
     LOGGER.info("analyse_mc done output=%s", output_file)
+
+
+def analyse_mc_dual(input_file: str, he3_output_file: str, he4_output_file: str, enable_trials: bool, draw: bool = False) -> None:
+    LOGGER.info("analyse_mc_dual start input=%s he3_out=%s he4_out=%s", input_file, he3_output_file, he4_output_file)
+    ROOT.gStyle.SetOptStat(0)
+    rdf = ROOT.RDataFrame("O2nucleitablemc", expand(input_file))
+    df_data = define_columns_for_data(rdf)
+    bundle_he3 = _book_mc_species(df_data, "he3", enable_trials, tag="_he3")
+    bundle_he4 = _book_mc_species(df_data, "he4", enable_trials, tag="_he4")
+    _run_graphs(bundle_he3["actions"] + bundle_he4["actions"])
+    if draw:
+        _draw_mc_eff(bundle_he3, "effMatterAntiMatter_he3")
+        _draw_mc_eff(bundle_he4, "effMatterAntiMatter_he4")
+    _write_mc_bundle(bundle_he3, he3_output_file)
+    _write_mc_bundle(bundle_he4, he4_output_file)
+    LOGGER.info("analyse_mc_dual done he3_out=%s he4_out=%s", he3_output_file, he4_output_file)
 
 
 def signal(input_file: str, output_file: str) -> None:
