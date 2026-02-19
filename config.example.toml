@@ -65,40 +65,20 @@ fit_tail = "single"
 tpc_signal_model = "ExpGaus"
 
 [paths]
-# Generic output used by merge_trees, analyse_data, analyse_mc, signal, systematics, checkpoint.
-# Input path is derived from [common] period/reco_pass (+ data_tree_basename).
-output = "$NUCLEI_OUTPUT/LHC24/apass1/default/DataHistos.root"
+# Optional overrides only.
+# All standard input/output locations are derived from [common] and species name.
 log_file = ""
 metadata_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/run_metadata.json"
 report_dir = "$NUCLEI_OUTPUT/LHC24/apass1/default/report"
-
-# Full-chain and stage-specific paths
-data_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/DataHistos.root"
-data_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/DataHistos.root"
-data_output_he3 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/DataHistos.root"
-data_output_he4 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he4/DataHistos.root"
-data_input_he3 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/DataHistos.root"
-data_input_he4 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he4/DataHistos.root"
-mc_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/MChistos.root"
-mc_output_he3 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/MChistos.root"
-mc_output_he4 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he4/MChistos.root"
-mc_input_he3 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/MChistos.root"
-mc_input_he4 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he4/MChistos.root"
-
-signal_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/signal.root"
-systematics_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/systematics.root"
 checkpoint_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/checkpoint.root"
-signal_input_he3 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/signal.root"
-signal_input_he4 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he4/signal.root"
-systematics_input_he3 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/systematics.root"
-systematics_input_he4 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he4/systematics.root"
-metadata_output_he3 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/run_metadata.json"
-metadata_output_he4 = "$NUCLEI_OUTPUT/LHC24/apass1/default/he4/run_metadata.json"
 
 # data_analysis_results is derived from [common] period/reco_pass (+ data_analysis_results_basename).
 mc_analysis_results = "$NUCLEI_INPUT/MC/LHC25b9/MChistos_new_final.root"
 
-# Optional aliases used by systematics/checkpoint tasks
-signal_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/signal.root"
-mc_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/MChistos.root"
-systematics_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/systematics.root"
+[species.he3.paths]
+# Keep this section to make species intent explicit.
+# Add overrides here only when needed.
+
+[species.he4.paths]
+# Keep this section to make species intent explicit.
+# Add overrides here only when needed.

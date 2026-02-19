@@ -60,7 +60,7 @@ python3 he3_cli.py --config config.example.toml --dump-default-config
 - `[selections]`: all data/MC filter expressions
 - `[cuts]`: trial scan grids (`nsigmaDCAz`, `fTPCnCls`, `nITScls`, `nsigmaTPC`)
 - `[run]`: task + runtime flags
-- `[paths]`: output paths and optional overrides (you typically do not need to set `input`/`data_tree`/`mc_tree`)
+- `[paths]`: optional non-derivable overrides (most IO paths are auto-derived)
 
 Logging and metadata:
 
@@ -76,15 +76,17 @@ Report controls:
 - `[report].fit_tail`: `single` (default) or `two` for p-value computation
 - `[report].tpc_signal_model`: TPC-only model used for extraction plots + summary table
 - `[run].species`: processing/report species list (e.g. `["he3"]` or `["he3","he4"]`)
+- `[species.<name>.paths]`: optional species-specific overrides
 
 Available report sections include:
 `signal_tof`, `signal_tpc`, `tof_tpc_2d`, `efficiency`, `pt_resolution`, `corrected_spectrum`.
 
 When two species are requested:
+- Both sections must exist: `[species.he3.paths]` and `[species.he4.paths]`
 - Generates per-species subreports in `<report_dir>/he3/` and `<report_dir>/he4/`
 - Generates a top-level index at `<report_dir>/index.html` linking both pages
-- Uses species-specific input paths when provided:
-`data_input_he3/he4`, `mc_input_he3/he4`, `signal_input_he3/he4`, `systematics_input_he3/he4`, `metadata_output_he3/he4`
+- Uses species-specific paths from sections like:
+`[species.he3.paths]` and `[species.he4.paths]` (`data_input`, `mc_input`, `signal_input`, `systematics_input`, `metadata_output`)
 
 ## Tasks
 

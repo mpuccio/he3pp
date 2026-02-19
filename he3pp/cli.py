@@ -102,6 +102,7 @@ def default_config() -> dict:
             "is_mc": True,
             "log_level": "INFO",
         },
+        "species": {},
         "report": {
             "sections": ["signal_tof", "signal_tpc", "tof_tpc_2d", "efficiency", "pt_resolution", "corrected_spectrum"],
             "fit_n_parameters": 6,
@@ -119,10 +120,6 @@ def default_config() -> dict:
             "mc_output": s.MC_FILENAME,
             "signal_output": s.SIGNAL_OUTPUT,
             "systematics_output": s.SYSTEMATICS_OUTPUT,
-            "data_output_he3": s.DATA_FILENAME,
-            "data_output_he4": s.DATA_FILENAME_HE4,
-            "mc_output_he3": s.MC_FILENAME,
-            "mc_output_he4": s.MC_FILENAME_HE4,
             "data_analysis_results": s.DATA_ANALYSIS_RESULTS,
             "mc_analysis_results": s.MC_ANALYSIS_RESULTS,
             "metadata_output": f"{s.BASE_VARIANT_OUTPUT_DIR}run_metadata.json",
@@ -156,12 +153,69 @@ def _anti_species_name(species: str) -> str:
     return f"anti{species}"
 
 
+def _species_paths(cfg: dict, species: str) -> dict:
+    node = cfg.get("species", {}).get(species, {})
+    if not isinstance(node, dict):
+        return {}
+    paths_node = node.get("paths", node)
+    return paths_node if isinstance(paths_node, dict) else {}
+
+
+def _species_output_defaults(species: str) -> dict[str, str]:
+    base = f"{s.BASE_VARIANT_OUTPUT_DIR}{species}/"
+    return {
+        "data_output": f"{base}DataHistos.root",
+        "data_input": f"{base}DataHistos.root",
+        "mc_output": f"{base}MChistos.root",
+        "mc_input": f"{base}MChistos.root",
+        "signal_output": f"{base}signal.root",
+        "signal_input": f"{base}signal.root",
+        "systematics_output": f"{base}systematics.root",
+        "systematics_input": f"{base}systematics.root",
+        "metadata_output": f"{base}run_metadata.json",
+    }
+
+
+def _resolve_species_path(
+    cfg: dict,
+    path_cfg: dict,
+    species: str,
+    key: str,
+    *,
+    legacy_key: str | None = None,
+    generic_key: str | None = None,
+    default: str | None = None,
+) -> str:
+    sp_paths = _species_paths(cfg, species)
+    if key in sp_paths:
+        return sp_paths[key]
+    if legacy_key and legacy_key in path_cfg:
+        return path_cfg[legacy_key]
+    if generic_key and generic_key in path_cfg:
+        return path_cfg[generic_key]
+    if default is not None:
+        return default
+    defaults = _species_output_defaults(species)
+    if key in defaults:
+        return defaults[key]
+    raise KeyError(f"Missing path for species={species}: key={key}")
+
+
 def run(cfg: dict) -> None:
     run_cfg = cfg.get("run", {})
     report_cfg = cfg.get("report", {})
     path_cfg_for_log = cfg.get("paths", {})
     _setup_logging(str(run_cfg.get("log_level", "INFO")), str(path_cfg_for_log.get("log_file", "") or ""))
     species = _parse_species(run_cfg)
+    species_cfg = cfg.get("species", {})
+    if len(species) > 1:
+        missing_sections = [sp for sp in species if not isinstance(species_cfg.get(sp), dict)]
+        if missing_sections:
+            raise ValueError(
+                "When requesting multiple species, config must define sections for each one. "
+                f"Missing: {', '.join(missing_sections)}. "
+                "Add [species.<name>.paths] entries (e.g. [species.he3.paths], [species.he4.paths])."
+            )
     LOGGER.info("Starting run task=%s species=%s", run_cfg.get("task", "analyse_data"), species)
 
     s.apply_runtime_overrides(cfg)
@@ -186,21 +240,35 @@ def run(cfg: dict) -> None:
         tasks.merge_trees(path_cfg.get("input", s.MC_TREE_FILENAME), path_cfg.get("output", "MergedAO2D.root"), bool(run_cfg.get("is_mc", True)))
     elif task == "analyse_data":
         input_file = path_cfg.get("input", s.DATA_TREE_FILENAME)
-        outputs = {
-            "he3": path_cfg.get("output_he3", path_cfg.get("data_output_he3", s.DATA_FILENAME)),
-            "he4": path_cfg.get("output_he4", path_cfg.get("data_output_he4", s.DATA_FILENAME_HE4)),
+        selected_outputs = {
+            sp: _resolve_species_path(
+                cfg,
+                path_cfg,
+                sp,
+                "data_output",
+                legacy_key=f"data_output_{sp}",
+                generic_key="output",
+                default=None,
+            )
+            for sp in species
         }
-        selected_outputs = {sp: outputs[sp] for sp in species}
         if len(selected_outputs) == 1 and "output" in path_cfg:
             selected_outputs[species[0]] = path_cfg.get("output")
         tasks.analyse_data_multi(input_file, selected_outputs, bool(run_cfg.get("skim", False)), draw)
     elif task == "analyse_mc":
         input_file = path_cfg.get("input", s.MC_TREE_FILENAME)
-        outputs = {
-            "he3": path_cfg.get("output_he3", path_cfg.get("mc_output_he3", s.MC_FILENAME)),
-            "he4": path_cfg.get("output_he4", path_cfg.get("mc_output_he4", s.MC_FILENAME_HE4)),
+        selected_outputs = {
+            sp: _resolve_species_path(
+                cfg,
+                path_cfg,
+                sp,
+                "mc_output",
+                legacy_key=f"mc_output_{sp}",
+                generic_key="output",
+                default=None,
+            )
+            for sp in species
         }
-        selected_outputs = {sp: outputs[sp] for sp in species}
         if len(selected_outputs) == 1 and "output" in path_cfg:
             selected_outputs[species[0]] = path_cfg.get("output")
         tasks.analyse_mc_multi(input_file, selected_outputs, bool(run_cfg.get("enable_trials", True)), draw)
@@ -230,17 +298,17 @@ def run(cfg: dict) -> None:
             sp = species[0]
             report_index = generate_report(
                 report_dir=root_report_dir,
-                signal_file_path=path_cfg.get(f"signal_input_{sp}", path_cfg.get("signal_input", path_cfg.get(f"signal_output_{sp}", path_cfg.get("signal_output", s.SIGNAL_OUTPUT)))),
-                mc_file_path=path_cfg.get(f"mc_input_{sp}", path_cfg.get(f"mc_output_{sp}", path_cfg.get("mc_input", path_cfg.get("mc_output", s.MC_FILENAME)))),
-                systematics_file_path=path_cfg.get(f"systematics_input_{sp}", path_cfg.get("systematics_input", path_cfg.get(f"systematics_output_{sp}", path_cfg.get("systematics_output", s.SYSTEMATICS_OUTPUT)))),
-                metadata_path=path_cfg.get(f"metadata_output_{sp}", path_cfg.get("metadata_output", "run_metadata.json")),
+                signal_file_path=_resolve_species_path(cfg, path_cfg, sp, "signal_input", legacy_key=f"signal_input_{sp}", generic_key="signal_input", default=None),
+                mc_file_path=_resolve_species_path(cfg, path_cfg, sp, "mc_input", legacy_key=f"mc_input_{sp}", generic_key="mc_input", default=None),
+                systematics_file_path=_resolve_species_path(cfg, path_cfg, sp, "systematics_input", legacy_key=f"systematics_input_{sp}", generic_key="systematics_input", default=None),
+                metadata_path=_resolve_species_path(cfg, path_cfg, sp, "metadata_output", legacy_key=f"metadata_output_{sp}", generic_key="metadata_output", default="run_metadata.json"),
                 species=_anti_species_name(sp),
                 sections=list(report_cfg.get("sections", [])),
                 fit_n_parameters=int(report_cfg.get("fit_n_parameters", 6)),
                 fit_alpha=float(report_cfg.get("fit_alpha", 0.05)),
                 fit_tail=str(report_cfg.get("fit_tail", "single")),
                 tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
-                data_file_path=path_cfg.get(f"data_input_{sp}", path_cfg.get(f"data_output_{sp}", path_cfg.get("data_input", path_cfg.get("data_output", s.DATA_FILENAME)))),
+                data_file_path=_resolve_species_path(cfg, path_cfg, sp, "data_input", legacy_key=f"data_input_{sp}", generic_key="data_input", default=None),
             )
             LOGGER.info("Report generated: %s", report_index)
         else:
@@ -249,17 +317,17 @@ def run(cfg: dict) -> None:
                 sub_report_dir = f"{root_report_dir}/{sp}"
                 report_index = generate_report(
                     report_dir=sub_report_dir,
-                    signal_file_path=path_cfg.get(f"signal_input_{sp}", path_cfg.get("signal_input", path_cfg.get(f"signal_output_{sp}", path_cfg.get("signal_output", s.SIGNAL_OUTPUT)))),
-                    mc_file_path=path_cfg.get(f"mc_input_{sp}", path_cfg.get(f"mc_output_{sp}", path_cfg.get("mc_input", path_cfg.get("mc_output", s.MC_FILENAME)))),
-                    systematics_file_path=path_cfg.get(f"systematics_input_{sp}", path_cfg.get("systematics_input", path_cfg.get(f"systematics_output_{sp}", path_cfg.get("systematics_output", s.SYSTEMATICS_OUTPUT)))),
-                    metadata_path=path_cfg.get(f"metadata_output_{sp}", path_cfg.get("metadata_output", "run_metadata.json")),
+                    signal_file_path=_resolve_species_path(cfg, path_cfg, sp, "signal_input", legacy_key=f"signal_input_{sp}", generic_key="signal_input", default=None),
+                    mc_file_path=_resolve_species_path(cfg, path_cfg, sp, "mc_input", legacy_key=f"mc_input_{sp}", generic_key="mc_input", default=None),
+                    systematics_file_path=_resolve_species_path(cfg, path_cfg, sp, "systematics_input", legacy_key=f"systematics_input_{sp}", generic_key="systematics_input", default=None),
+                    metadata_path=_resolve_species_path(cfg, path_cfg, sp, "metadata_output", legacy_key=f"metadata_output_{sp}", generic_key="metadata_output", default="run_metadata.json"),
                     species=_anti_species_name(sp),
                     sections=list(report_cfg.get("sections", [])),
                     fit_n_parameters=int(report_cfg.get("fit_n_parameters", 6)),
                     fit_alpha=float(report_cfg.get("fit_alpha", 0.05)),
                     fit_tail=str(report_cfg.get("fit_tail", "single")),
                     tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
-                    data_file_path=path_cfg.get(f"data_input_{sp}", path_cfg.get(f"data_output_{sp}", path_cfg.get("data_input", path_cfg.get("data_output", s.DATA_FILENAME)))),
+                    data_file_path=_resolve_species_path(cfg, path_cfg, sp, "data_input", legacy_key=f"data_input_{sp}", generic_key="data_input", default=None),
                 )
                 entries.append({"label": sp.upper(), "species": _anti_species_name(sp), "href": f"{sp}/index.html", "path": report_index})
                 LOGGER.info("Subreport generated [%s]: %s", sp, report_index)
@@ -271,23 +339,39 @@ def run(cfg: dict) -> None:
             LOGGER.info("Combined report index generated: %s", dual_index)
     elif task == "full_chain":
         data_outputs = {
-            "he3": path_cfg.get("data_output_he3", path_cfg.get("data_output", s.DATA_FILENAME)),
-            "he4": path_cfg.get("data_output_he4", s.DATA_FILENAME_HE4),
+            sp: _resolve_species_path(
+                cfg,
+                path_cfg,
+                sp,
+                "data_output",
+                legacy_key=f"data_output_{sp}",
+                generic_key="data_output",
+                default=None,
+            )
+            for sp in species
         }
         mc_outputs = {
-            "he3": path_cfg.get("mc_output_he3", path_cfg.get("mc_output", s.MC_FILENAME)),
-            "he4": path_cfg.get("mc_output_he4", s.MC_FILENAME_HE4),
+            sp: _resolve_species_path(
+                cfg,
+                path_cfg,
+                sp,
+                "mc_output",
+                legacy_key=f"mc_output_{sp}",
+                generic_key="mc_output",
+                default=None,
+            )
+            for sp in species
         }
-        tasks.analyse_data_multi(path_cfg.get("data_tree", s.DATA_TREE_FILENAME), {sp: data_outputs[sp] for sp in species}, bool(run_cfg.get("skim", False)), draw)
-        tasks.analyse_mc_multi(path_cfg.get("mc_tree", s.MC_TREE_FILENAME), {sp: mc_outputs[sp] for sp in species}, bool(run_cfg.get("enable_trials", True)), draw)
+        tasks.analyse_data_multi(path_cfg.get("data_tree", s.DATA_TREE_FILENAME), data_outputs, bool(run_cfg.get("skim", False)), draw)
+        tasks.analyse_mc_multi(path_cfg.get("mc_tree", s.MC_TREE_FILENAME), mc_outputs, bool(run_cfg.get("enable_trials", True)), draw)
 
         from .reporting import generate_dual_report_index, generate_report
 
         entries = []
         root_report_dir = path_cfg.get("report_dir", f"{s.BASE_VARIANT_OUTPUT_DIR}report")
         for sp in species:
-            sig_out = path_cfg.get(f"signal_output_{sp}", f"{s.BASE_VARIANT_OUTPUT_DIR}{sp}/signal.root")
-            syst_out = path_cfg.get(f"systematics_output_{sp}", f"{s.BASE_VARIANT_OUTPUT_DIR}{sp}/systematics.root")
+            sig_out = _resolve_species_path(cfg, path_cfg, sp, "signal_output", legacy_key=f"signal_output_{sp}", generic_key="signal_output", default=None)
+            syst_out = _resolve_species_path(cfg, path_cfg, sp, "systematics_output", legacy_key=f"systematics_output_{sp}", generic_key="systematics_output", default=None)
             tasks.signal(data_outputs[sp], sig_out)
             tasks.systematics(sig_out, mc_outputs[sp], path_cfg.get("data_analysis_results", s.DATA_ANALYSIS_RESULTS), syst_out)
 
@@ -307,7 +391,7 @@ def run(cfg: dict) -> None:
                 signal_file_path=sig_out,
                 mc_file_path=mc_outputs[sp],
                 systematics_file_path=syst_out,
-                metadata_path=path_cfg.get(f"metadata_output_{sp}", path_cfg.get("metadata_output", "run_metadata.json")),
+                metadata_path=_resolve_species_path(cfg, path_cfg, sp, "metadata_output", legacy_key=f"metadata_output_{sp}", generic_key="metadata_output", default="run_metadata.json"),
                 species=_anti_species_name(sp),
                 sections=list(report_cfg.get("sections", [])),
                 fit_n_parameters=int(report_cfg.get("fit_n_parameters", 6)),
