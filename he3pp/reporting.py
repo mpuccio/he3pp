@@ -541,6 +541,12 @@ img { width:100%; border-radius:10px; border:1px solid #d6dddc; background:#ffff
   const scrollStep = (track) => Math.max(280, Math.floor(track.clientWidth * 0.88));
   const move = (targetId, direction) => { const track = document.getElementById(targetId); if (!track) return; track.scrollBy({ left: direction * scrollStep(track), behavior: "smooth" }); };
   document.querySelectorAll(".carousel-btn").forEach((btn) => { const target = btn.getAttribute("data-target"); const dir = btn.classList.contains("next") ? 1 : -1; btn.addEventListener("click", () => move(target, dir)); });
+  document.querySelectorAll(".quick-nav a[href^='#']").forEach((link) => {
+    link.addEventListener("click", () => {
+      const target = document.querySelector(link.getAttribute("href"));
+      if (target && target.tagName.toLowerCase() === "details") target.open = true;
+    });
+  });
 })();
 </script>
 """
