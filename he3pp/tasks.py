@@ -46,19 +46,28 @@ def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = 
     if skim:
         df_base.Filter(SKIM_SELECTION_TEMPLATE.format(nsigma=nsigma)).Snapshot("nucleiTree", "data/skimmed.root")
 
-    h_dca_xy_a = [df_primary.Filter(f"!matter && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model("hDCAxyAHe", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", 100, -0.2, 0.2), pt_name, "fDCAxy")]
-    h_dca_xy_m = [df_primary.Filter(f"matter && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model("hDCAxyMHe", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", 100, -0.2, 0.2), pt_name, "fDCAxy")]
-    h_dca_z_a = [df_primary.Filter(f"!matter && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model("hDCAzAHe", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{z} (cm);Counts", 100, -0.2, 0.2), pt_name, "fDCAz")]
-    h_dca_z_m = [df_primary.Filter(f"matter && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model("hDCAzMHe", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{z} (cm);Counts", 100, -0.2, 0.2), pt_name, "fDCAz")]
-    h_dca_xy_sec_m = [df_secondary.Filter(f"matter && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model("hDCAxySecondaryMHe", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", 100, -0.2, 0.2), pt_name, "fDCAxy")]
-    h_dca_xy_sec_a = [df_secondary.Filter(f"!matter && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model("hDCAxySecondaryAHe", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", 100, -0.2, 0.2), pt_name, "fDCAxy")]
+    matter_map = {"A": "!matter", "M": "matter"}
+    h_dca_xy: dict[str, list[Any]] = {}
+    h_dca_z: dict[str, list[Any]] = {}
+    h_dca_xy_secondary: dict[str, list[Any]] = {}
+    h_tpc: dict[str, list[Any]] = {}
+    h_tof: dict[str, list[Any]] = {}
 
-    h_tpc_a = [df_primary.Filter(f"!matter && {mass_cut}" if particle == "he3" else "!matter").Histo2D(tpc_anti_model, "ptUncorr" if particle == "he4" else pt_name, nsigma)]
-    h_tpc_m = [df_primary.Filter(f"matter && {mass_cut}" if particle == "he3" else "matter").Histo2D(tpc_mat_model, pt_name, nsigma)]
+    for label, matter_sel in matter_map.items():
+        h_dca_xy[label] = [df_primary.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model(f"hDCAxy{label}He", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", 100, -0.2, 0.2), pt_name, "fDCAxy")]
+        h_dca_z[label] = [df_primary.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model(f"hDCAz{label}He", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{z} (cm);Counts", 100, -0.2, 0.2), pt_name, "fDCAz")]
+        h_dca_xy_secondary[label] = [df_secondary.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model(f"hDCAxySecondary{label}He", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", 100, -0.2, 0.2), pt_name, "fDCAxy")]
+
+        tpc_sel = f"{matter_sel} && {mass_cut}" if particle == "he3" else matter_sel
+        tpc_model = tpc_anti_model if label == "A" else tpc_mat_model
+        tpc_pt_name = "ptUncorr" if (particle == "he4" and label == "A") else pt_name
+        h_tpc[label] = [df_primary.Filter(tpc_sel).Histo2D(tpc_model, tpc_pt_name, nsigma)]
 
     nsigma_tof_cut = HE4_NSIGMA_TOF_CUT if particle == "he4" else HE3_NSIGMA_TOF_CUT
-    h_tof_a = [df_primary.Filter(f"!matter && std::abs({nsigma}) < {nsigma_tof_cut}").Histo2D(h2_model("fATOFsignal", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});m_{{TOF}}-m_{{^{{{'4' if particle == 'he4' else '3'}}}#bar{{He}}}};Counts", 100, -0.9, 1.1), pt_name, dmass)]
-    h_tof_m = [df_primary.Filter(f"matter && std::abs({nsigma}) < {nsigma_tof_cut}").Histo2D(h2_model("fMTOFsignal", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});m_{{TOF}}-m_{{^{{{'4' if particle == 'he4' else '3'}}}He}};Counts", 100, -0.9, 1.1), pt_name, dmass)]
+    for label, matter_sel in matter_map.items():
+        isotope = "4" if particle == "he4" else "3"
+        species_label = f"^{{{isotope}}}#bar{{He}}" if label == "A" else f"^{{{isotope}}}He"
+        h_tof[label] = [df_primary.Filter(f"{matter_sel} && std::abs({nsigma}) < {nsigma_tof_cut}").Histo2D(h2_model(f"f{label}TOFsignal", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});m_{{TOF}}-m_{{{species_label}}};Counts", 100, -0.9, 1.1), pt_name, dmass)]
 
     i_trial = 0
     if particle == "he3":
@@ -68,50 +77,50 @@ def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = 
                 df_tpc = df_dca_z.Filter(f"fTPCnCls > {cut_tpc}")
                 for cut_its in CUT_NAMES["nITScls"]:
                     df_its = df_tpc.Filter(f"nITScls >= {cut_its}")
-                    h_dca_xy_a.append(df_its.Filter(f"!matter && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model(f"hDCAxyAHe3{i_trial}", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", 560, -0.7, 0.7), pt_name, "fDCAxy"))
-                    h_dca_xy_m.append(df_its.Filter(f"matter && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model(f"hDCAxyMHe3{i_trial}", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", 560, -0.7, 0.7), pt_name, "fDCAxy"))
-                    h_dca_z_a.append(df_its.Filter(f"!matter && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model(f"hDCAzAHe3{i_trial}", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{z} (cm);Counts", 560, -0.7, 0.7), pt_name, "fDCAz"))
-                    h_dca_z_m.append(df_its.Filter(f"matter && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model(f"hDCAzMHe3{i_trial}", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{z} (cm);Counts", 560, -0.7, 0.7), pt_name, "fDCAz"))
-
-                    h_tpc_a.append(df_its.Filter(f"!matter && {HE3_TRIAL_DCA_SELECTION} && {mass_cut}").Histo2D(h2_model(f"fATPCcounts{i_trial}", ";#it{p}_{T}^{rec} (GeV/#it{c});^{3}#bar{He} n#sigma_{TPC};Counts", 100, -5, 5), pt_name, nsigma))
-                    h_tpc_m.append(df_its.Filter(f"matter && {HE3_TRIAL_DCA_SELECTION} && {mass_cut}").Histo2D(h2_model(f"fMTPCcounts{i_trial}", ";#it{p}_{T}^{rec} (GeV/#it{c});^{3}He n#sigma_{TPC};Counts", 100, -5, 5), pt_name, nsigma))
-                    h_tof_a.append(df_its.Filter(f"!matter && {HE3_TRIAL_DCA_SELECTION} && std::abs({nsigma}) < {HE3_NSIGMA_TOF_CUT}").Histo2D(h2_model(f"fATOFsignal{i_trial}", ";#it{p}_{T}^{rec} (GeV/#it{c});m_{TOF}-m_{^{3}#bar{He}};Counts", 100, -0.9, 1.1), pt_name, dmass))
-                    h_tof_m.append(df_its.Filter(f"matter && {HE3_TRIAL_DCA_SELECTION} && std::abs({nsigma}) < {HE3_NSIGMA_TOF_CUT}").Histo2D(h2_model(f"fMTOFsignal{i_trial}", ";#it{p}_{T}^{rec} (GeV/#it{c});m_{TOF}-m_{^{3}He};Counts", 100, -0.9, 1.1), pt_name, dmass))
+                    for label, matter_sel in matter_map.items():
+                        species_label = "^{3}#bar{He}" if label == "A" else "^{3}He"
+                        h_dca_xy[label].append(df_its.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model(f"hDCAxy{label}He3{i_trial}", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", 560, -0.7, 0.7), pt_name, "fDCAxy"))
+                        h_dca_z[label].append(df_its.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(h2_model(f"hDCAz{label}He3{i_trial}", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{z} (cm);Counts", 560, -0.7, 0.7), pt_name, "fDCAz"))
+                        h_tpc[label].append(df_its.Filter(f"{matter_sel} && {HE3_TRIAL_DCA_SELECTION} && {mass_cut}").Histo2D(h2_model(f"f{label}TPCcounts{i_trial}", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});{species_label} n#sigma_{{TPC}};Counts", 100, -5, 5), pt_name, nsigma))
+                        h_tof[label].append(df_its.Filter(f"{matter_sel} && {HE3_TRIAL_DCA_SELECTION} && std::abs({nsigma}) < {HE3_NSIGMA_TOF_CUT}").Histo2D(h2_model(f"f{label}TOFsignal{i_trial}", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});m_{{TOF}}-m_{{{species_label}}};Counts", 100, -0.9, 1.1), pt_name, dmass))
                     i_trial += 1
 
     if draw:
-        for hist in [h_tpc_a[0], h_tpc_m[0], h_tof_a[0], h_tof_m[0], h_dca_xy_a[0], h_dca_xy_m[0], h_dca_z_a[0], h_dca_z_m[0], h_dca_xy_sec_m[0], h_dca_xy_sec_a[0]]:
-            c = ROOT.TCanvas()
-            c.SetRightMargin(0.15)
-            hist.DrawClone("colz")
+        draw_order = [
+            (h_tpc, ("A", "M")),
+            (h_tof, ("A", "M")),
+            (h_dca_xy, ("A", "M")),
+            (h_dca_z, ("A", "M")),
+            (h_dca_xy_secondary, ("M", "A")),
+        ]
+        for hist_map, labels in draw_order:
+            for label in labels:
+                hist = hist_map[label][0]
+                c = ROOT.TCanvas()
+                c.SetRightMargin(0.15)
+                hist.DrawClone("colz")
 
     output_file = expand(output_file)
     ensure_parent(output_file)
     out = ROOT.TFile(output_file, "recreate")
     d0 = out.mkdir("nuclei")
     d0.cd()
-    write_hist(h_tpc_a[0], "fATPCcounts")
-    write_hist(h_tpc_m[0], "fMTPCcounts")
-    write_hist(h_tof_a[0], "fATOFsignal")
-    write_hist(h_tof_m[0], "fMTOFsignal")
-    write_hist(h_dca_xy_a[0], "hDCAxyAHe3")
-    write_hist(h_dca_xy_m[0], "hDCAxyMHe3")
-    write_hist(h_dca_z_a[0], "hDCAzAHe3")
-    write_hist(h_dca_z_m[0], "hDCAzMHe3")
-    write_hist(h_dca_xy_sec_m[0], "hDCAxySecondaryMHe3")
-    write_hist(h_dca_xy_sec_a[0], "hDCAxySecondaryAHe3")
+    for label in ("A", "M"):
+        write_hist(h_tpc[label][0], f"f{label}TPCcounts")
+        write_hist(h_tof[label][0], f"f{label}TOFsignal")
+        write_hist(h_dca_xy[label][0], f"hDCAxy{label}He3")
+        write_hist(h_dca_z[label][0], f"hDCAz{label}He3")
+    for label in ("M", "A"):
+        write_hist(h_dca_xy_secondary[label][0], f"hDCAxySecondary{label}He3")
 
     for idx in range(i_trial):
         dtrial = out.mkdir(f"nuclei{idx}")
         dtrial.cd()
-        write_hist(h_tpc_a[idx + 1], "fATPCcounts")
-        write_hist(h_tpc_m[idx + 1], "fMTPCcounts")
-        write_hist(h_tof_a[idx + 1], "fATOFsignal")
-        write_hist(h_tof_m[idx + 1], "fMTOFsignal")
-        write_hist(h_dca_xy_a[idx + 1], "hDCAxyAHe3")
-        write_hist(h_dca_xy_m[idx + 1], "hDCAxyMHe3")
-        write_hist(h_dca_z_a[idx + 1], "hDCAzAHe3")
-        write_hist(h_dca_z_m[idx + 1], "hDCAzMHe3")
+        for label in ("A", "M"):
+            write_hist(h_tpc[label][idx + 1], f"f{label}TPCcounts")
+            write_hist(h_tof[label][idx + 1], f"f{label}TOFsignal")
+            write_hist(h_dca_xy[label][idx + 1], f"hDCAxy{label}He3")
+            write_hist(h_dca_z[label][idx + 1], f"hDCAz{label}He3")
     out.Close()
     LOGGER.info("analyse_data done output=%s", output_file)
 
