@@ -18,22 +18,27 @@ tof_min_pt = 1.0
 pt_range = [1.4, 7.0]
 tpc_function_names = ["GausGaus", "ExpGaus", "ExpTailGaus", "LognormalLognormal"]
 
-[selections]
+[selections.common]
+skim_template = "std::abs(nsigmaDCAz) < 8 && std::abs(fDCAxy) < 0.2 && std::abs({nsigma}) < 5"
+
+[selections.he3]
 base_rec = "fTPCnCls >= 110 && nITScls >= 5 && std::abs(fEta) < 0.9 && std::abs(fDCAxy) < 0.7 && pt > 0.8 && pt < 9.0"
 default_rec = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) < 7 && std::abs(fDCAxy) < 0.2"
-he4_base_rec = "fTPCnCls >= 110 && nITScls >= 5 && abs(fEta) < 0.9 && std::abs(fDCAxy) < 0.7 && ptHe4 > 0.5 && ptHe4 < 9.0"
-he4_primary_rec = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) < 7 && std::abs(fDCAxy) < 0.2"
 secondary_rec = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) > 7 && std::abs(fDCAxy) < 0.2"
-he3_trial_dca = "std::abs(fDCAxy) < 0.2"
-he3_nsigma_tof = 3.5
-he4_nsigma_tof = 3.0
-skim_template = "std::abs(nsigmaDCAz) < 8 && std::abs(fDCAxy) < 0.2 && std::abs({nsigma}) < 5"
-he3_mc_reco_append = "&& isPrimary"
-he3_mc_gen = "isPrimary && std::abs(yMC) < 0.5"
-he4_mc_pid = "isHe4 && isPrimary"
-he4_mc_reco = "nITScls > 4 && fTPCnCls > 110 && std::abs(fEta) < 0.9 && std::abs(rapidity) < 0.5"
-he4_mc_gen = "std::abs(yMC) < 0.5"
-he4_mc_signal_tracking = "fTPCnCls > 120 && nITScls >= 6 && std::abs(fDCAz) < 0.7"
+trial_dca = "std::abs(fDCAxy) < 0.2"
+nsigma_tof = 3.5
+mc_reco_append = "&& isPrimary"
+mc_gen = "isPrimary && std::abs(yMC) < 0.5"
+
+[selections.he4]
+base_rec = "fTPCnCls >= 110 && nITScls >= 5 && abs(fEta) < 0.9 && std::abs(fDCAxy) < 0.7 && ptHe4 > 0.5 && ptHe4 < 9.0"
+primary_rec = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) < 7 && std::abs(fDCAxy) < 0.2"
+secondary_rec = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) > 7 && std::abs(fDCAxy) < 0.2"
+nsigma_tof = 3.0
+mc_pid = "isHe4 && isPrimary"
+mc_reco = "nITScls > 4 && fTPCnCls > 110 && std::abs(fEta) < 0.9 && std::abs(rapidity) < 0.5"
+mc_gen = "std::abs(yMC) < 0.5"
+mc_signal_tracking = "fTPCnCls > 120 && nITScls >= 6 && std::abs(fDCAz) < 0.7"
 
 [cuts]
 nsigmaDCAz = [6.0, 7.0, 8.0]
@@ -74,11 +79,3 @@ checkpoint_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/checkpoint.root"
 
 # data_analysis_results is derived from [common] period/reco_pass (+ data_analysis_results_basename).
 mc_analysis_results = "$NUCLEI_INPUT/MC/LHC25b9/MChistos_new_final.root"
-
-[species.he3.paths]
-# Keep this section to make species intent explicit.
-# Add overrides here only when needed.
-
-[species.he4.paths]
-# Keep this section to make species intent explicit.
-# Add overrides here only when needed.

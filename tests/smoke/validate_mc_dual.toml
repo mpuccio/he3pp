@@ -5,6 +5,10 @@ enable_mt = true
 enable_trials = true
 draw = false
 
+[selections.he3]
+
+[selections.he4]
+
 [paths]
 input = "$NUCLEI_INPUT/MC/LHC25b9/AO2D_coalescence.root"
 metadata_output = "/tmp/he3pp_validation/mc_dual_run_metadata.json"

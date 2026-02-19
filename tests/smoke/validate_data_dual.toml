@@ -4,6 +4,10 @@ species = ["he3", "he4"]
 enable_mt = true
 draw = false
 
+[selections.he3]
+
+[selections.he4]
+
 [paths]
 input = "$NUCLEI_INPUT/data/LHC24/apass1/AO2D.root"
 metadata_output = "/tmp/he3pp_validation/data_dual_run_metadata.json"

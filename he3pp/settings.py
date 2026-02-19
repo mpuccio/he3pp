@@ -101,6 +101,9 @@ def apply_runtime_overrides(cfg: dict[str, Any]) -> None:
 
     common = cfg.get("common", {})
     selections = cfg.get("selections", {})
+    sel_common = selections.get("common", {}) if isinstance(selections, dict) else {}
+    sel_he3 = selections.get("he3", {}) if isinstance(selections, dict) else {}
+    sel_he4 = selections.get("he4", {}) if isinstance(selections, dict) else {}
     cuts = cfg.get("cuts", {})
 
     MC_PRODUCTION = str(common.get("mc_production", MC_PRODUCTION))
@@ -138,21 +141,21 @@ def apply_runtime_overrides(cfg: dict[str, Any]) -> None:
         raise ValueError(f"common.tpc_function_names must have at least {NTPC_FUNCTIONS} entries.")
     TPC_FUNCTION_NAMES = [str(v) for v in tpc_names]
 
-    BASE_REC_SELECTIONS = str(selections.get("base_rec", BASE_REC_SELECTIONS))
-    DEFAULT_REC_SELECTIONS = str(selections.get("default_rec", DEFAULT_REC_SELECTIONS))
-    HE4_BASE_SELECTION = str(selections.get("he4_base_rec", HE4_BASE_SELECTION))
-    HE4_PRIMARY_SELECTION = str(selections.get("he4_primary_rec", HE4_PRIMARY_SELECTION))
-    SECONDARY_SELECTION = str(selections.get("secondary_rec", SECONDARY_SELECTION))
-    HE3_TRIAL_DCA_SELECTION = str(selections.get("he3_trial_dca", HE3_TRIAL_DCA_SELECTION))
-    HE3_NSIGMA_TOF_CUT = float(selections.get("he3_nsigma_tof", HE3_NSIGMA_TOF_CUT))
-    HE4_NSIGMA_TOF_CUT = float(selections.get("he4_nsigma_tof", HE4_NSIGMA_TOF_CUT))
-    SKIM_SELECTION_TEMPLATE = str(selections.get("skim_template", SKIM_SELECTION_TEMPLATE))
-    HE3_MC_RECO_APPEND = str(selections.get("he3_mc_reco_append", HE3_MC_RECO_APPEND))
-    HE3_MC_GEN_SELECTION = str(selections.get("he3_mc_gen", HE3_MC_GEN_SELECTION))
-    HE4_MC_PID_SELECTION = str(selections.get("he4_mc_pid", HE4_MC_PID_SELECTION))
-    HE4_MC_RECO_SELECTION = str(selections.get("he4_mc_reco", HE4_MC_RECO_SELECTION))
-    HE4_MC_GEN_SELECTION = str(selections.get("he4_mc_gen", HE4_MC_GEN_SELECTION))
-    HE4_MC_SIGNAL_TRACKING = str(selections.get("he4_mc_signal_tracking", HE4_MC_SIGNAL_TRACKING))
+    BASE_REC_SELECTIONS = str(sel_he3.get("base_rec", BASE_REC_SELECTIONS))
+    DEFAULT_REC_SELECTIONS = str(sel_he3.get("default_rec", DEFAULT_REC_SELECTIONS))
+    HE4_BASE_SELECTION = str(sel_he4.get("base_rec", HE4_BASE_SELECTION))
+    HE4_PRIMARY_SELECTION = str(sel_he4.get("primary_rec", HE4_PRIMARY_SELECTION))
+    SECONDARY_SELECTION = str(sel_he3.get("secondary_rec", sel_he4.get("secondary_rec", SECONDARY_SELECTION)))
+    HE3_TRIAL_DCA_SELECTION = str(sel_he3.get("trial_dca", HE3_TRIAL_DCA_SELECTION))
+    HE3_NSIGMA_TOF_CUT = float(sel_he3.get("nsigma_tof", HE3_NSIGMA_TOF_CUT))
+    HE4_NSIGMA_TOF_CUT = float(sel_he4.get("nsigma_tof", HE4_NSIGMA_TOF_CUT))
+    SKIM_SELECTION_TEMPLATE = str(sel_common.get("skim_template", SKIM_SELECTION_TEMPLATE))
+    HE3_MC_RECO_APPEND = str(sel_he3.get("mc_reco_append", HE3_MC_RECO_APPEND))
+    HE3_MC_GEN_SELECTION = str(sel_he3.get("mc_gen", HE3_MC_GEN_SELECTION))
+    HE4_MC_PID_SELECTION = str(sel_he4.get("mc_pid", HE4_MC_PID_SELECTION))
+    HE4_MC_RECO_SELECTION = str(sel_he4.get("mc_reco", HE4_MC_RECO_SELECTION))
+    HE4_MC_GEN_SELECTION = str(sel_he4.get("mc_gen", HE4_MC_GEN_SELECTION))
+    HE4_MC_SIGNAL_TRACKING = str(sel_he4.get("mc_signal_tracking", HE4_MC_SIGNAL_TRACKING))
 
     CUT_NAMES["nsigmaDCAz"] = [float(v) for v in cuts.get("nsigmaDCAz", CUT_NAMES["nsigmaDCAz"])]
     CUT_NAMES["fTPCnCls"] = [float(v) for v in cuts.get("fTPCnCls", CUT_NAMES["fTPCnCls"])]

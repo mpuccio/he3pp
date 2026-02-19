@@ -57,7 +57,9 @@ python3 he3_cli.py --config config.example.toml --dump-default-config
 - `[common]`: former `Common.h` style constants (period, reco pass, pt bins, ranges, etc.)
   - Input paths are derived from `period`/`reco_pass` (data) and `mc_production` (MC) plus optional basename keys:
   `data_tree_basename`, `data_analysis_results_basename`, `mc_tree_basename`, `mc_analysis_results_basename`
-- `[selections]`: all data/MC filter expressions
+- `[selections.common]`: shared selection snippets (e.g. skim template)
+- `[selections.he3]`: he3-specific selections (required when `he3` is in `run.species`)
+- `[selections.he4]`: he4-specific selections (required when `he4` is in `run.species`)
 - `[cuts]`: trial scan grids (`nsigmaDCAz`, `fTPCnCls`, `nITScls`, `nsigmaTPC`)
 - `[run]`: task + runtime flags
 - `[paths]`: optional non-derivable overrides (most IO paths are auto-derived)
@@ -76,16 +78,16 @@ Report controls:
 - `[report].fit_tail`: `single` (default) or `two` for p-value computation
 - `[report].tpc_signal_model`: TPC-only model used for extraction plots + summary table
 - `[run].species`: processing/report species list (e.g. `["he3"]` or `["he3","he4"]`)
-- `[species.<name>.paths]`: optional species-specific overrides
+- `[species.<name>.paths]`: optional species-specific path overrides (not required)
 
 Available report sections include:
 `signal_tof`, `signal_tpc`, `tof_tpc_2d`, `efficiency`, `pt_resolution`, `corrected_spectrum`.
 
 When two species are requested:
-- Both sections must exist: `[species.he3.paths]` and `[species.he4.paths]`
+- Both selection sections must exist: `[selections.he3]` and `[selections.he4]`
 - Generates per-species subreports in `<report_dir>/he3/` and `<report_dir>/he4/`
 - Generates a top-level index at `<report_dir>/index.html` linking both pages
-- Uses species-specific paths from sections like:
+- If provided, uses species-specific path overrides from sections like:
 `[species.he3.paths]` and `[species.he4.paths]` (`data_input`, `mc_input`, `signal_input`, `systematics_input`, `metadata_output`)
 
 ## Tasks

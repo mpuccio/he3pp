@@ -69,21 +69,28 @@ def default_config() -> dict:
             "tpc_function_names": s.TPC_FUNCTION_NAMES,
         },
         "selections": {
-            "base_rec": s.BASE_REC_SELECTIONS,
-            "default_rec": s.DEFAULT_REC_SELECTIONS,
-            "he4_base_rec": s.HE4_BASE_SELECTION,
-            "he4_primary_rec": s.HE4_PRIMARY_SELECTION,
-            "secondary_rec": s.SECONDARY_SELECTION,
-            "he3_trial_dca": s.HE3_TRIAL_DCA_SELECTION,
-            "he3_nsigma_tof": s.HE3_NSIGMA_TOF_CUT,
-            "he4_nsigma_tof": s.HE4_NSIGMA_TOF_CUT,
-            "skim_template": s.SKIM_SELECTION_TEMPLATE,
-            "he3_mc_reco_append": s.HE3_MC_RECO_APPEND,
-            "he3_mc_gen": s.HE3_MC_GEN_SELECTION,
-            "he4_mc_pid": s.HE4_MC_PID_SELECTION,
-            "he4_mc_reco": s.HE4_MC_RECO_SELECTION,
-            "he4_mc_gen": s.HE4_MC_GEN_SELECTION,
-            "he4_mc_signal_tracking": s.HE4_MC_SIGNAL_TRACKING,
+            "common": {
+                "skim_template": s.SKIM_SELECTION_TEMPLATE,
+            },
+            "he3": {
+                "base_rec": s.BASE_REC_SELECTIONS,
+                "default_rec": s.DEFAULT_REC_SELECTIONS,
+                "secondary_rec": s.SECONDARY_SELECTION,
+                "trial_dca": s.HE3_TRIAL_DCA_SELECTION,
+                "nsigma_tof": s.HE3_NSIGMA_TOF_CUT,
+                "mc_reco_append": s.HE3_MC_RECO_APPEND,
+                "mc_gen": s.HE3_MC_GEN_SELECTION,
+            },
+            "he4": {
+                "base_rec": s.HE4_BASE_SELECTION,
+                "primary_rec": s.HE4_PRIMARY_SELECTION,
+                "secondary_rec": s.SECONDARY_SELECTION,
+                "nsigma_tof": s.HE4_NSIGMA_TOF_CUT,
+                "mc_pid": s.HE4_MC_PID_SELECTION,
+                "mc_reco": s.HE4_MC_RECO_SELECTION,
+                "mc_gen": s.HE4_MC_GEN_SELECTION,
+                "mc_signal_tracking": s.HE4_MC_SIGNAL_TRACKING,
+            },
         },
         "cuts": {
             "nsigmaDCAz": s.CUT_NAMES["nsigmaDCAz"],
@@ -207,14 +214,14 @@ def run(cfg: dict) -> None:
     path_cfg_for_log = cfg.get("paths", {})
     _setup_logging(str(run_cfg.get("log_level", "INFO")), str(path_cfg_for_log.get("log_file", "") or ""))
     species = _parse_species(run_cfg)
-    species_cfg = cfg.get("species", {})
-    if len(species) > 1:
-        missing_sections = [sp for sp in species if not isinstance(species_cfg.get(sp), dict)]
-        if missing_sections:
+    if str(run_cfg.get("task", "analyse_data")).lower() in {"analyse_data", "analyse_mc", "full_chain"}:
+        sel_cfg = cfg.get("selections", {})
+        missing_sel_sections = [sp for sp in species if not isinstance(sel_cfg.get(sp), dict)]
+        if missing_sel_sections:
             raise ValueError(
-                "When requesting multiple species, config must define sections for each one. "
-                f"Missing: {', '.join(missing_sections)}. "
-                "Add [species.<name>.paths] entries (e.g. [species.he3.paths], [species.he4.paths])."
+                "Missing species selection sections for requested run.species: "
+                + ", ".join(missing_sel_sections)
+                + ". Add [selections.he3] / [selections.he4] as needed."
             )
     LOGGER.info("Starting run task=%s species=%s", run_cfg.get("task", "analyse_data"), species)
 
