@@ -204,6 +204,14 @@ def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: 
         tpc_name = "He3"
         gen_name = "He3"
 
+    matter_map = {"A": "!matter", "M": "matter"}
+    h_gen = {"A": h_gen_a, "M": h_gen_m}
+    h_reco_tpc = {"A": h_reco_tpc_a, "M": h_reco_tpc_m}
+    h_reco_tof = {"A": h_reco_tof_a, "M": h_reco_tof_m}
+    h_gen_w = {"A": h_gen_a_w, "M": h_gen_m_w}
+    h_reco_tpc_w = {"A": h_reco_tpc_a_w, "M": h_reco_tpc_m_w}
+    h_reco_tof_w = {"A": h_reco_tof_a_w, "M": h_reco_tof_m_w}
+
     n_trials = 0
     if enable_trials:
         for cut_dca_z in CUT_NAMES["nsigmaDCAz"]:
@@ -212,27 +220,23 @@ def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: 
                 d_tpc = d_dca.Filter(f"fTPCnCls > {cut_tpc}")
                 for cut_its in CUT_NAMES["nITScls"]:
                     _ = d_tpc.Filter(f"nITScls >= {cut_its}")
-                    h_reco_tpc_a.append(reco_df_for_trials.Filter("!matter").Histo1D(h1_model(f"TPCA{tpc_name}{n_trials}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt"))
-                    h_reco_tpc_m.append(reco_df_for_trials.Filter("matter").Histo1D(h1_model(f"TPCM{tpc_name}{n_trials}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt"))
-                    h_reco_tof_a.append(reco_df_for_trials.Filter("!matter && hasTOF").Histo1D(h1_model(f"TOFA{tpc_name}{n_trials}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt"))
-                    h_reco_tof_m.append(reco_df_for_trials.Filter("matter && hasTOF").Histo1D(h1_model(f"TOFM{tpc_name}{n_trials}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt"))
-
-                    h_reco_tpc_a_w.append(reco_df_for_trials.Filter("!matter").Histo1D(h1_model(f"TPCA{tpc_name}W{n_trials}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight"))
-                    h_reco_tpc_m_w.append(reco_df_for_trials.Filter("matter").Histo1D(h1_model(f"TPCM{tpc_name}W{n_trials}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight"))
-                    h_reco_tof_a_w.append(reco_df_for_trials.Filter("!matter && hasTOF").Histo1D(h1_model(f"TOFA{tpc_name}W{n_trials}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight"))
-                    h_reco_tof_m_w.append(reco_df_for_trials.Filter("matter && hasTOF").Histo1D(h1_model(f"TOFM{tpc_name}W{n_trials}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight"))
+                    for label, matter_sel in matter_map.items():
+                        h_reco_tpc[label].append(reco_df_for_trials.Filter(matter_sel).Histo1D(h1_model(f"TPC{label}{tpc_name}{n_trials}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt"))
+                        h_reco_tof[label].append(reco_df_for_trials.Filter(f"{matter_sel} && hasTOF").Histo1D(h1_model(f"TOF{label}{tpc_name}{n_trials}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt"))
+                        h_reco_tpc_w[label].append(reco_df_for_trials.Filter(matter_sel).Histo1D(h1_model(f"TPC{label}{tpc_name}W{n_trials}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight"))
+                        h_reco_tof_w[label].append(reco_df_for_trials.Filter(f"{matter_sel} && hasTOF").Histo1D(h1_model(f"TOF{label}{tpc_name}W{n_trials}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight"))
                     n_trials += 1
 
     if draw:
         c = ROOT.TCanvas("effMatterAntiMatter", "effMatterAntiMatter")
         c.cd()
-        h_eff_a = h_reco_tpc_a[0].GetValue().Clone("hEffA")
-        h_eff_a.Divide(h_reco_tpc_a[0].GetPtr(), h_gen_a[0].GetPtr(), 1.0, 1.0, "B")
-        h_eff_a.SetLineColor(ROOT.kRed)
-        h_eff_a.Draw()
-        h_eff_m = h_reco_tpc_m[0].GetValue().Clone("hEffM")
-        h_eff_m.Divide(h_reco_tpc_m[0].GetPtr(), h_gen_m[0].GetPtr(), 1.0, 1.0, "B")
-        h_eff_m.Draw("same")
+        h_eff = {}
+        for label in ("A", "M"):
+            h_eff[label] = h_reco_tpc[label][0].GetValue().Clone(f"hEff{label}")
+            h_eff[label].Divide(h_reco_tpc[label][0].GetPtr(), h_gen[label][0].GetPtr(), 1.0, 1.0, "B")
+        h_eff["A"].SetLineColor(ROOT.kRed)
+        h_eff["A"].Draw()
+        h_eff["M"].Draw("same")
 
     out_name = expand(output_file)
     ensure_parent(out_name)
@@ -240,75 +244,57 @@ def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: 
     d0 = out.mkdir("nuclei")
     d0.cd()
 
-    write_hist(h_gen_a[0], f"genA{gen_name}")
-    write_hist(h_gen_m[0], f"genM{gen_name}")
-    write_hist(h_reco_tpc_a[0], f"TPCA{tpc_name}")
-    write_hist(h_reco_tpc_m[0], f"TPCM{tpc_name}")
-    write_hist(h_reco_tof_a[0], f"TOFA{tpc_name}")
-    write_hist(h_reco_tof_m[0], f"TOFM{tpc_name}")
+    for label in ("A", "M"):
+        write_hist(h_gen[label][0], f"gen{label}{gen_name}")
+        write_hist(h_reco_tpc[label][0], f"TPC{label}{tpc_name}")
+        write_hist(h_reco_tof[label][0], f"TOF{label}{tpc_name}")
     write_hist(h_delta_pt, f"hDeltaPt{tpc_name}")
     write_hist(h_delta_pt_corr, f"hDeltaPtCorr{tpc_name}")
     write_hist(h_mom_res, f"hMomRes{tpc_name}")
 
-    write_hist(h_gen_a_w[0], f"genA{gen_name}W")
-    write_hist(h_gen_m_w[0], f"genM{gen_name}W")
-    write_hist(h_reco_tpc_a_w[0], f"TPCA{tpc_name}W")
-    write_hist(h_reco_tpc_m_w[0], f"TPCM{tpc_name}W")
-    write_hist(h_reco_tof_a_w[0], f"TOFA{tpc_name}W")
-    write_hist(h_reco_tof_m_w[0], f"TOFM{tpc_name}W")
+    for label in ("A", "M"):
+        write_hist(h_gen_w[label][0], f"gen{label}{gen_name}W")
+        write_hist(h_reco_tpc_w[label][0], f"TPC{label}{tpc_name}W")
+        write_hist(h_reco_tof_w[label][0], f"TOF{label}{tpc_name}W")
 
-    def write_eff(prefix: str, reco_a: Any, reco_m: Any, reco_tof_a: Any, reco_tof_m: Any, gen_a: Any, gen_m: Any) -> tuple[Any, Any]:
-        eff_tpc_a = reco_a.GetValue().Clone(f"{prefix}TPCA")
-        eff_tpc_m = reco_m.GetValue().Clone(f"{prefix}TPCM")
-        eff_tof_a = reco_tof_a.GetValue().Clone(f"{prefix}TOFA")
-        eff_tof_m = reco_tof_m.GetValue().Clone(f"{prefix}TOFM")
-        eff_tpc_a.Divide(reco_a.GetPtr(), gen_a.GetPtr(), 1.0, 1.0, "B")
-        eff_tpc_m.Divide(reco_m.GetPtr(), gen_m.GetPtr(), 1.0, 1.0, "B")
-        eff_tof_a.Divide(reco_tof_a.GetPtr(), gen_a.GetPtr(), 1.0, 1.0, "B")
-        eff_tof_m.Divide(reco_tof_m.GetPtr(), gen_m.GetPtr(), 1.0, 1.0, "B")
-        for h in (eff_tpc_a, eff_tpc_m, eff_tof_a, eff_tof_m):
-            h.GetYaxis().SetTitle("Efficiency #times Acceptance")
-        eff_tpc_a.Write(f"{prefix}effTPCA")
-        eff_tpc_m.Write(f"{prefix}effTPCM")
-        eff_tof_a.Write(f"{prefix}effTOFA")
-        eff_tof_m.Write(f"{prefix}effTOFM")
-        return eff_tpc_a, eff_tpc_m
+    def write_eff(prefix: str, reco_tpc: dict[str, Any], reco_tof: dict[str, Any], gen: dict[str, Any], index: int) -> dict[str, Any]:
+        eff_tpc = {}
+        for label in ("A", "M"):
+            eff_tpc[label] = reco_tpc[label][index].GetValue().Clone(f"{prefix}TPC{label}")
+            eff_tof = reco_tof[label][index].GetValue().Clone(f"{prefix}TOF{label}")
+            eff_tpc[label].Divide(reco_tpc[label][index].GetPtr(), gen[label][0].GetPtr(), 1.0, 1.0, "B")
+            eff_tof.Divide(reco_tof[label][index].GetPtr(), gen[label][0].GetPtr(), 1.0, 1.0, "B")
+            eff_tpc[label].GetYaxis().SetTitle("Efficiency #times Acceptance")
+            eff_tof.GetYaxis().SetTitle("Efficiency #times Acceptance")
+            eff_tpc[label].Write(f"{prefix}effTPC{label}")
+            eff_tof.Write(f"{prefix}effTOF{label}")
+        return eff_tpc
 
-    write_eff("", h_reco_tpc_a[0], h_reco_tpc_m[0], h_reco_tof_a[0], h_reco_tof_m[0], h_gen_a[0], h_gen_m[0])
-    write_eff(_weighted_eff_name(""), h_reco_tpc_a_w[0], h_reco_tpc_m_w[0], h_reco_tof_a_w[0], h_reco_tof_m_w[0], h_gen_a_w[0], h_gen_m_w[0])
+    write_eff("", h_reco_tpc, h_reco_tof, h_gen, 0)
+    write_eff(_weighted_eff_name(""), h_reco_tpc_w, h_reco_tof_w, h_gen_w, 0)
 
     for i in range(n_trials):
         dtrial = out.mkdir(f"nuclei{i}")
         dtrial.cd()
-        write_hist(h_gen_a[0], f"genA{gen_name}")
-        write_hist(h_gen_m[0], f"genM{gen_name}")
-        write_hist(h_reco_tpc_a[i + 1], f"TPCA{tpc_name}")
-        write_hist(h_reco_tpc_m[i + 1], f"TPCM{tpc_name}")
-        write_hist(h_reco_tof_a[i + 1], f"TOFA{tpc_name}")
-        write_hist(h_reco_tof_m[i + 1], f"TOFM{tpc_name}")
+        for label in ("A", "M"):
+            write_hist(h_gen[label][0], f"gen{label}{gen_name}")
+            write_hist(h_reco_tpc[label][i + 1], f"TPC{label}{tpc_name}")
+            write_hist(h_reco_tof[label][i + 1], f"TOF{label}{tpc_name}")
+            write_hist(h_gen_w[label][0], f"gen{label}{gen_name}W")
+            write_hist(h_reco_tpc_w[label][i + 1], f"TPC{label}{tpc_name}W")
+            write_hist(h_reco_tof_w[label][i + 1], f"TOF{label}{tpc_name}W")
 
-        write_hist(h_gen_a_w[0], f"genA{gen_name}W")
-        write_hist(h_gen_m_w[0], f"genM{gen_name}W")
-        write_hist(h_reco_tpc_a_w[i + 1], f"TPCA{tpc_name}W")
-        write_hist(h_reco_tpc_m_w[i + 1], f"TPCM{tpc_name}W")
-        write_hist(h_reco_tof_a_w[i + 1], f"TOFA{tpc_name}W")
-        write_hist(h_reco_tof_m_w[i + 1], f"TOFM{tpc_name}W")
+        eff_tpc = write_eff("", h_reco_tpc, h_reco_tof, h_gen, i + 1)
+        for label in ("A", "M"):
+            matching_tof = h_reco_tof[label][i + 1].GetValue().Clone(f"matchingTOF{label}{i}")
+            matching_tof.Divide(eff_tpc[label])
+            matching_tof.Write()
 
-        eff_tpc_a, eff_tpc_m = write_eff("", h_reco_tpc_a[i + 1], h_reco_tpc_m[i + 1], h_reco_tof_a[i + 1], h_reco_tof_m[i + 1], h_gen_a[0], h_gen_m[0])
-        matching_tof_a = h_reco_tof_a[i + 1].GetValue().Clone(f"matchingTOFA{i}")
-        matching_tof_m = h_reco_tof_m[i + 1].GetValue().Clone(f"matchingTOFM{i}")
-        matching_tof_a.Divide(eff_tpc_a)
-        matching_tof_m.Divide(eff_tpc_m)
-        matching_tof_a.Write()
-        matching_tof_m.Write()
-
-        eff_w_tpc_a, eff_w_tpc_m = write_eff(_weighted_eff_name(""), h_reco_tpc_a_w[i + 1], h_reco_tpc_m_w[i + 1], h_reco_tof_a_w[i + 1], h_reco_tof_m_w[i + 1], h_gen_a_w[0], h_gen_m_w[0])
-        matching_w_tof_a = h_reco_tof_a_w[i + 1].GetValue().Clone(f"matchingWTOFA{i}")
-        matching_w_tof_m = h_reco_tof_m_w[i + 1].GetValue().Clone(f"matchingWTOFM{i}")
-        matching_w_tof_a.Divide(eff_w_tpc_a)
-        matching_w_tof_m.Divide(eff_w_tpc_m)
-        matching_w_tof_a.Write()
-        matching_w_tof_m.Write()
+        eff_w_tpc = write_eff(_weighted_eff_name(""), h_reco_tpc_w, h_reco_tof_w, h_gen_w, i + 1)
+        for label in ("A", "M"):
+            matching_w_tof = h_reco_tof_w[label][i + 1].GetValue().Clone(f"matchingWTOF{label}{i}")
+            matching_w_tof.Divide(eff_w_tpc[label])
+            matching_w_tof.Write()
 
     out.Close()
     LOGGER.info("analyse_mc done output=%s", output_file)
