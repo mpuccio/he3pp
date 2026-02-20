@@ -116,17 +116,19 @@ def default_config() -> dict:
             "tpc_signal_model": "ExpGaus",
         },
         "paths": {
-            "input": s.DATA_TREE_FILENAME,
-            "output": s.DATA_FILENAME,
             "data_tree": s.DATA_TREE_FILENAME,
             "data_output": s.DATA_FILENAME,
             "data_input": s.DATA_FILENAME,
             "mc_tree": s.MC_TREE_FILENAME,
             "mc_output": s.MC_FILENAME,
+            "mc_input": s.MC_FILENAME,
+            "signal_input": s.SIGNAL_OUTPUT,
             "signal_output": s.SIGNAL_OUTPUT,
+            "systematics_input": s.SYSTEMATICS_OUTPUT,
             "systematics_output": s.SYSTEMATICS_OUTPUT,
             "data_analysis_results": s.DATA_ANALYSIS_RESULTS,
             "mc_analysis_results": s.MC_ANALYSIS_RESULTS,
+            "checkpoint_output": "",
             "metadata_output": f"{s.BASE_VARIANT_OUTPUT_DIR}run_metadata.json",
             "log_file": "",
             "report_dir": f"{s.BASE_VARIANT_OUTPUT_DIR}report",
@@ -187,15 +189,12 @@ def _resolve_species_path(
     species: str,
     key: str,
     *,
-    legacy_key: str | None = None,
     generic_key: str | None = None,
     default: str | None = None,
 ) -> str:
     sp_paths = _species_paths(cfg, species)
     if key in sp_paths:
         return sp_paths[key]
-    if legacy_key and legacy_key in path_cfg:
-        return path_cfg[legacy_key]
     if generic_key and generic_key in path_cfg:
         return path_cfg[generic_key]
     if default is not None:
@@ -249,7 +248,6 @@ def run(cfg: dict) -> None:
                 path_cfg,
                 sp,
                 "data_output",
-                legacy_key=f"data_output_{sp}",
                 generic_key="data_output",
                 default=None,
             )
@@ -264,7 +262,6 @@ def run(cfg: dict) -> None:
                 path_cfg,
                 sp,
                 "mc_output",
-                legacy_key=f"mc_output_{sp}",
                 generic_key="mc_output",
                 default=None,
             )
@@ -272,13 +269,13 @@ def run(cfg: dict) -> None:
         }
         tasks.analyse_mc_multi(input_file, selected_outputs, bool(run_cfg.get("enable_trials", True)), draw)
     elif task == "signal":
-        tasks.signal(path_cfg.get("input", s.DATA_FILENAME), path_cfg.get("output", s.SIGNAL_OUTPUT))
+        tasks.signal(path_cfg.get("data_input", s.DATA_FILENAME), path_cfg.get("signal_output", s.SIGNAL_OUTPUT))
     elif task == "systematics":
         tasks.systematics(
             path_cfg.get("signal_input", s.SIGNAL_OUTPUT),
             path_cfg.get("mc_input", s.MC_FILENAME),
             path_cfg.get("data_analysis_results", s.DATA_ANALYSIS_RESULTS),
-            path_cfg.get("output", s.SYSTEMATICS_OUTPUT),
+            path_cfg.get("systematics_output", s.SYSTEMATICS_OUTPUT),
         )
     elif task == "checkpoint":
         tasks.checkpoint(
@@ -287,7 +284,7 @@ def run(cfg: dict) -> None:
             path_cfg.get("mc_input", s.MC_FILENAME),
             path_cfg.get("mc_analysis_results", s.MC_ANALYSIS_RESULTS),
             path_cfg.get("signal_input", s.SIGNAL_OUTPUT),
-            path_cfg.get("output"),
+            path_cfg.get("checkpoint_output"),
         )
     elif task == "report":
         from .reporting import generate_dual_report_index, generate_report
@@ -297,16 +294,16 @@ def run(cfg: dict) -> None:
             sp = species[0]
             report_index = generate_report(
                 report_dir=root_report_dir,
-                signal_file_path=_resolve_species_path(cfg, path_cfg, sp, "signal_input", legacy_key=f"signal_input_{sp}", generic_key="signal_input", default=None),
-                mc_file_path=_resolve_species_path(cfg, path_cfg, sp, "mc_input", legacy_key=f"mc_input_{sp}", generic_key="mc_input", default=None),
-                systematics_file_path=_resolve_species_path(cfg, path_cfg, sp, "systematics_input", legacy_key=f"systematics_input_{sp}", generic_key="systematics_input", default=None),
-                metadata_path=_resolve_species_path(cfg, path_cfg, sp, "metadata_output", legacy_key=f"metadata_output_{sp}", generic_key="metadata_output", default="run_metadata.json"),
+                signal_file_path=_resolve_species_path(cfg, path_cfg, sp, "signal_input", generic_key="signal_input", default=None),
+                mc_file_path=_resolve_species_path(cfg, path_cfg, sp, "mc_input", generic_key="mc_input", default=None),
+                systematics_file_path=_resolve_species_path(cfg, path_cfg, sp, "systematics_input", generic_key="systematics_input", default=None),
+                metadata_path=_resolve_species_path(cfg, path_cfg, sp, "metadata_output", generic_key="metadata_output", default="run_metadata.json"),
                 species=_anti_species_name(sp),
                 sections=list(report_cfg.get("sections", [])),
                 fit_alpha=float(report_cfg.get("fit_alpha", 0.05)),
                 fit_tail=str(report_cfg.get("fit_tail", "single")),
                 tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
-                data_file_path=_resolve_species_path(cfg, path_cfg, sp, "data_input", legacy_key=f"data_input_{sp}", generic_key="data_input", default=None),
+                data_file_path=_resolve_species_path(cfg, path_cfg, sp, "data_input", generic_key="data_input", default=None),
             )
             LOGGER.info("Report generated: %s", report_index)
         else:
@@ -315,16 +312,16 @@ def run(cfg: dict) -> None:
                 sub_report_dir = f"{root_report_dir}/{sp}"
                 report_index = generate_report(
                     report_dir=sub_report_dir,
-                    signal_file_path=_resolve_species_path(cfg, path_cfg, sp, "signal_input", legacy_key=f"signal_input_{sp}", generic_key="signal_input", default=None),
-                    mc_file_path=_resolve_species_path(cfg, path_cfg, sp, "mc_input", legacy_key=f"mc_input_{sp}", generic_key="mc_input", default=None),
-                    systematics_file_path=_resolve_species_path(cfg, path_cfg, sp, "systematics_input", legacy_key=f"systematics_input_{sp}", generic_key="systematics_input", default=None),
-                    metadata_path=_resolve_species_path(cfg, path_cfg, sp, "metadata_output", legacy_key=f"metadata_output_{sp}", generic_key="metadata_output", default="run_metadata.json"),
+                    signal_file_path=_resolve_species_path(cfg, path_cfg, sp, "signal_input", generic_key="signal_input", default=None),
+                    mc_file_path=_resolve_species_path(cfg, path_cfg, sp, "mc_input", generic_key="mc_input", default=None),
+                    systematics_file_path=_resolve_species_path(cfg, path_cfg, sp, "systematics_input", generic_key="systematics_input", default=None),
+                    metadata_path=_resolve_species_path(cfg, path_cfg, sp, "metadata_output", generic_key="metadata_output", default="run_metadata.json"),
                     species=_anti_species_name(sp),
                     sections=list(report_cfg.get("sections", [])),
                     fit_alpha=float(report_cfg.get("fit_alpha", 0.05)),
                     fit_tail=str(report_cfg.get("fit_tail", "single")),
                     tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
-                    data_file_path=_resolve_species_path(cfg, path_cfg, sp, "data_input", legacy_key=f"data_input_{sp}", generic_key="data_input", default=None),
+                    data_file_path=_resolve_species_path(cfg, path_cfg, sp, "data_input", generic_key="data_input", default=None),
                 )
                 entries.append({"label": sp.upper(), "species": _anti_species_name(sp), "href": f"{sp}/index.html", "path": report_index})
                 LOGGER.info("Subreport generated [%s]: %s", sp, report_index)
@@ -341,7 +338,6 @@ def run(cfg: dict) -> None:
                 path_cfg,
                 sp,
                 "data_output",
-                legacy_key=f"data_output_{sp}",
                 generic_key="data_output",
                 default=None,
             )
@@ -353,7 +349,6 @@ def run(cfg: dict) -> None:
                 path_cfg,
                 sp,
                 "mc_output",
-                legacy_key=f"mc_output_{sp}",
                 generic_key="mc_output",
                 default=None,
             )
@@ -367,8 +362,8 @@ def run(cfg: dict) -> None:
         entries = []
         root_report_dir = path_cfg.get("report_dir", f"{s.BASE_VARIANT_OUTPUT_DIR}report")
         for sp in species:
-            sig_out = _resolve_species_path(cfg, path_cfg, sp, "signal_output", legacy_key=f"signal_output_{sp}", generic_key="signal_output", default=None)
-            syst_out = _resolve_species_path(cfg, path_cfg, sp, "systematics_output", legacy_key=f"systematics_output_{sp}", generic_key="systematics_output", default=None)
+            sig_out = _resolve_species_path(cfg, path_cfg, sp, "signal_output", generic_key="signal_output", default=None)
+            syst_out = _resolve_species_path(cfg, path_cfg, sp, "systematics_output", generic_key="systematics_output", default=None)
             tasks.signal(data_outputs[sp], sig_out)
             tasks.systematics(sig_out, mc_outputs[sp], path_cfg.get("data_analysis_results", s.DATA_ANALYSIS_RESULTS), syst_out)
 
@@ -388,7 +383,7 @@ def run(cfg: dict) -> None:
                 signal_file_path=sig_out,
                 mc_file_path=mc_outputs[sp],
                 systematics_file_path=syst_out,
-                metadata_path=_resolve_species_path(cfg, path_cfg, sp, "metadata_output", legacy_key=f"metadata_output_{sp}", generic_key="metadata_output", default="run_metadata.json"),
+                metadata_path=_resolve_species_path(cfg, path_cfg, sp, "metadata_output", generic_key="metadata_output", default="run_metadata.json"),
                 species=_anti_species_name(sp),
                 sections=list(report_cfg.get("sections", [])),
                 fit_alpha=float(report_cfg.get("fit_alpha", 0.05)),
