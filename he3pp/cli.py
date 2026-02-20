@@ -114,6 +114,10 @@ def default_config() -> dict:
             "fit_tail": "single",
             "tpc_signal_model": "ExpGaus",
         },
+        "particle": {
+            "he3": copy.deepcopy(s.DEFAULT_PARTICLE_CONFIGS["he3"]),
+            "he4": copy.deepcopy(s.DEFAULT_PARTICLE_CONFIGS["he4"]),
+        },
         "paths": {
             "data_tree": s.DATA_TREE_FILENAME,
             "data_output": s.DATA_FILENAME,
@@ -151,7 +155,24 @@ def _parse_species(run_cfg: dict) -> str:
     return value
 
 
-def run(cfg: dict) -> None:
+def _species_stage_paths(species: str) -> dict[str, str]:
+    base = f"{s.BASE_VARIANT_OUTPUT_DIR}{species}/"
+    return {
+        "data_output": f"{base}DataHistos.root",
+        "data_input": f"{base}DataHistos.root",
+        "mc_output": f"{base}MChistos.root",
+        "mc_input": f"{base}MChistos.root",
+        "signal_output": f"{base}signal.root",
+        "signal_input": f"{base}signal.root",
+        "systematics_output": f"{base}systematics.root",
+        "systematics_input": f"{base}systematics.root",
+        "checkpoint_output": f"{base}checkpoint.root",
+        "metadata_output": f"{base}run_metadata.json",
+        "report_dir": f"{base}report",
+    }
+
+
+def run(cfg: dict, user_cfg: dict | None = None) -> None:
     run_cfg = cfg.get("run", {})
     report_cfg = cfg.get("report", {})
     path_cfg_for_log = cfg.get("paths", {})
@@ -169,8 +190,16 @@ def run(cfg: dict) -> None:
     s.apply_runtime_overrides(cfg)
     from . import tasks  # lazy import so tasks bind runtime-overridden settings
 
+    user_paths = (user_cfg or {}).get("paths", {})
+    if not isinstance(user_paths, dict):
+        user_paths = {}
+
     path_cfg = dict(default_config()["paths"])
     path_cfg.update(cfg.get("paths", {}))
+    species_defaults = _species_stage_paths(species)
+    for key, value in species_defaults.items():
+        if key not in user_paths:
+            path_cfg[key] = value
 
     task = str(run_cfg.get("task", "analyse_data")).lower()
     enable_mt = bool(run_cfg.get("enable_mt", True))
@@ -191,13 +220,14 @@ def run(cfg: dict) -> None:
         input_file = path_cfg.get("mc_tree", s.MC_TREE_FILENAME)
         tasks.analyse_mc(input_file, path_cfg.get("mc_output", s.MC_FILENAME), species, bool(run_cfg.get("enable_trials", True)), draw)
     elif task == "signal":
-        tasks.signal(path_cfg.get("data_input", s.DATA_FILENAME), path_cfg.get("signal_output", s.SIGNAL_OUTPUT))
+        tasks.signal(path_cfg.get("data_input", s.DATA_FILENAME), path_cfg.get("signal_output", s.SIGNAL_OUTPUT), species)
     elif task == "systematics":
         tasks.systematics(
             path_cfg.get("signal_input", s.SIGNAL_OUTPUT),
             path_cfg.get("mc_input", s.MC_FILENAME),
             path_cfg.get("data_analysis_results", s.DATA_ANALYSIS_RESULTS),
             path_cfg.get("systematics_output", s.SYSTEMATICS_OUTPUT),
+            species,
         )
     elif task == "checkpoint":
         tasks.checkpoint(
@@ -207,21 +237,24 @@ def run(cfg: dict) -> None:
             path_cfg.get("mc_analysis_results", s.MC_ANALYSIS_RESULTS),
             path_cfg.get("signal_input", s.SIGNAL_OUTPUT),
             path_cfg.get("checkpoint_output"),
+            species,
         )
     elif task == "report":
         from .reporting import generate_report
 
+        particle_profile = s.get_particle_config(species)
         report_index = generate_report(
             report_dir=path_cfg.get("report_dir", f"{s.BASE_VARIANT_OUTPUT_DIR}report"),
             signal_file_path=path_cfg.get("signal_input", s.SIGNAL_OUTPUT),
             mc_file_path=path_cfg.get("mc_input", s.MC_FILENAME),
             systematics_file_path=path_cfg.get("systematics_input", s.SYSTEMATICS_OUTPUT),
             metadata_path=path_cfg.get("metadata_output", "run_metadata.json"),
-            species=f"anti{species}",
+            species=str(particle_profile["anti_name"]),
             sections=list(report_cfg.get("sections", [])),
             fit_alpha=float(report_cfg.get("fit_alpha", 0.05)),
             fit_tail=str(report_cfg.get("fit_tail", "single")),
             tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
+            mc_hist_suffix=str(particle_profile.get("mc_hist_suffix", "He3")),
             data_file_path=path_cfg.get("data_input", s.DATA_FILENAME),
         )
         LOGGER.info("Report generated: %s", report_index)
@@ -233,10 +266,10 @@ def run(cfg: dict) -> None:
 
         tasks.analyse_data(path_cfg.get("data_tree", s.DATA_TREE_FILENAME), data_out, species, bool(run_cfg.get("skim", False)), draw)
         tasks.analyse_mc(path_cfg.get("mc_tree", s.MC_TREE_FILENAME), mc_out, species, bool(run_cfg.get("enable_trials", True)), draw)
-        tasks.signal(data_out, sig_out)
-        tasks.systematics(sig_out, mc_out, path_cfg.get("data_analysis_results", s.DATA_ANALYSIS_RESULTS), syst_out)
+        tasks.signal(data_out, sig_out, species)
+        tasks.systematics(sig_out, mc_out, path_cfg.get("data_analysis_results", s.DATA_ANALYSIS_RESULTS), syst_out, species)
 
-        if path_cfg.get("checkpoint_output"):
+        if "checkpoint_output" in user_paths and path_cfg.get("checkpoint_output"):
             tasks.checkpoint(
                 syst_out,
                 path_cfg.get("data_analysis_results", s.DATA_ANALYSIS_RESULTS),
@@ -244,21 +277,24 @@ def run(cfg: dict) -> None:
                 path_cfg.get("mc_analysis_results", s.MC_ANALYSIS_RESULTS),
                 sig_out,
                 path_cfg.get("checkpoint_output"),
+                species,
             )
 
         from .reporting import generate_report
 
+        particle_profile = s.get_particle_config(species)
         report_index = generate_report(
             report_dir=path_cfg.get("report_dir", f"{s.BASE_VARIANT_OUTPUT_DIR}report"),
             signal_file_path=sig_out,
             mc_file_path=mc_out,
             systematics_file_path=syst_out,
             metadata_path=path_cfg.get("metadata_output", "run_metadata.json"),
-            species=f"anti{species}",
+            species=str(particle_profile["anti_name"]),
             sections=list(report_cfg.get("sections", [])),
             fit_alpha=float(report_cfg.get("fit_alpha", 0.05)),
             fit_tail=str(report_cfg.get("fit_tail", "single")),
             tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
+            mc_hist_suffix=str(particle_profile.get("mc_hist_suffix", "He3")),
             data_file_path=data_out,
         )
         LOGGER.info("Report generated: %s", report_index)
@@ -282,7 +318,7 @@ def main() -> int:
 
     merged = default_config()
     merged.update(cfg)
-    for section in ("common", "selections", "cuts", "run", "report", "paths"):
+    for section in ("common", "selections", "cuts", "run", "report", "particle", "paths"):
         merged.setdefault(section, {})
         merged[section].update(cfg.get(section, {}))
 
@@ -290,7 +326,7 @@ def main() -> int:
     status = "success"
     error = ""
     try:
-        run(merged)
+        run(merged, cfg)
     except Exception as exc:
         status = "failed"
         error = str(exc)
@@ -307,7 +343,14 @@ def main() -> int:
             "config": copy.deepcopy(merged),
         }
         try:
-            _write_metadata(merged.get("paths", {}).get("metadata_output", "run_metadata.json"), metadata)
+            metadata_path = (cfg.get("paths", {}) if isinstance(cfg, dict) else {}).get("metadata_output")
+            if not metadata_path:
+                try:
+                    species = _parse_species(merged.get("run", {}))
+                    metadata_path = _species_stage_paths(species)["metadata_output"]
+                except Exception:
+                    metadata_path = merged.get("paths", {}).get("metadata_output", "run_metadata.json")
+            _write_metadata(metadata_path, metadata)
         except Exception as meta_exc:
             LOGGER.error("Failed to write metadata: %s", meta_exc)
     return 0

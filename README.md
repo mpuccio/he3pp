@@ -42,8 +42,8 @@ python3 -c 'import ROOT; print(ROOT.gROOT.GetVersion())'
 python3 he3_cli.py --config config.example.toml
 ```
 
-Outputs are organized per variant under:
-`$NUCLEI_OUTPUT/<period>/<reco_pass>/<variant>/`
+Outputs are organized per variant and species under:
+`$NUCLEI_OUTPUT/<period>/<reco_pass>/<variant>/<species>/`
 including analysis ROOT files, metadata, and report assets.
 
 Show default merged config:
@@ -62,6 +62,7 @@ python3 he3_cli.py --config config.example.toml --dump-default-config
 - `[selections.he4]`: he4-specific selections (required when `run.species = "he4"`)
 - `[cuts]`: trial scan grids (`nsigmaDCAz`, `fTPCnCls`, `nITScls`, `nsigmaTPC`)
 - `[run]`: task + runtime flags
+- `[particle.he3]` / `[particle.he4]`: optional particle-profile overrides (mass, PDG, labels, key column names)
 - `[paths]`: optional non-derivable overrides (most IO paths are auto-derived)
 
 Logging and metadata:

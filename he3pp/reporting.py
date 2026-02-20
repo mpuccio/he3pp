@@ -446,6 +446,7 @@ def generate_report(
     fit_alpha: float = 0.05,
     fit_tail: str = "single",
     tpc_signal_model: str = "ExpGaus",
+    mc_hist_suffix: str = "He3",
     data_file_path: str | None = None,
 ) -> str:
     report_dir = expand(report_dir)
@@ -482,9 +483,8 @@ def generate_report(
             overlay_path=f"nuclei/effTOF{letter}",
         )
     )
-    mc_suffix = "He4" if "he4" in species.lower() else "He3"
-    items.append(ReportItem("pt_resolution", "pT(rec)-pT(sim) Uncorrected", mc_file_path, f"nuclei/hDeltaPt{mc_suffix}", "assets/delta_pt_uncorrected.png"))
-    items.append(ReportItem("pt_resolution", "pT(rec)-pT(sim) Corrected", mc_file_path, f"nuclei/hDeltaPtCorr{mc_suffix}", "assets/delta_pt_corrected.png"))
+    items.append(ReportItem("pt_resolution", "pT(rec)-pT(sim) Uncorrected", mc_file_path, f"nuclei/hDeltaPt{mc_hist_suffix}", "assets/delta_pt_uncorrected.png"))
+    items.append(ReportItem("pt_resolution", "pT(rec)-pT(sim) Corrected", mc_file_path, f"nuclei/hDeltaPtCorr{mc_hist_suffix}", "assets/delta_pt_corrected.png"))
     items.append(ReportItem("corrected_spectrum", "Normalized Corrected Spectrum TPC", systematics_file_path, f"fStatTPC{letter}", "assets/corrected_tpc_norm.png", overlay_path=f"fSystTPC{letter}"))
     items.append(ReportItem("corrected_spectrum", "Normalized Corrected Spectrum TOF", systematics_file_path, f"fStatTOF{letter}", "assets/corrected_tof_norm.png", overlay_path=f"fSystTOF{letter}"))
 

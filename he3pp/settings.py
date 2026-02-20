@@ -1,4 +1,5 @@
 from array import array
+import copy
 from typing import Any
 
 LETTER = ["M", "A"]
@@ -66,6 +67,83 @@ MC_FILENAME_HE4 = ""
 SIGNAL_OUTPUT = ""
 SYSTEMATICS_OUTPUT = ""
 
+DEFAULT_PARTICLE_CONFIGS = {
+    "he3": {
+        "name": "he3",
+        "anti_name": "antihe3",
+        "label_matter": "^{3}He",
+        "label_antimatter": "^{3}#bar{He}",
+        "mass": 2.80839,
+        "mc_mass": 2.809230089,
+        "pdg_abs": 1000020030,
+        "nsigma_col": "nsigmaHe3",
+        "mass_cut_col": "hasGoodTOFmassHe3",
+        "pt_col": "pt",
+        "dmass_col": "deltaMassHe3",
+        "tof_mass_range_min": -1.0,
+        "tof_mass_range_max": 1.0,
+        "tpc_apply_mass_cut": True,
+        "tpc_pt_col_anti": "pt",
+        "tpc_pt_col_matter": "pt",
+        "tpc_anti_nbins": 0,
+        "tpc_anti_xmin": 0.0,
+        "tpc_anti_xmax": 0.0,
+        "trial_enabled": True,
+        "mc_hist_suffix": "He3",
+        "mc_pt_corr_col": "pt",
+        "mc_delta_x_col": "pt",
+    },
+    "he4": {
+        "name": "he4",
+        "anti_name": "antihe4",
+        "label_matter": "^{4}He",
+        "label_antimatter": "^{4}#bar{He}",
+        "mass": 3.72738,
+        "mc_mass": 3.72738,
+        "pdg_abs": 1000020040,
+        "nsigma_col": "nsigmaHe4",
+        "mass_cut_col": "hasGoodTOFmassHe4",
+        "pt_col": "ptHe4",
+        "dmass_col": "deltaMassHe4",
+        "tof_mass_range_min": -0.6,
+        "tof_mass_range_max": 0.6,
+        "tpc_apply_mass_cut": False,
+        "tpc_pt_col_anti": "ptUncorr",
+        "tpc_pt_col_matter": "ptHe4",
+        "tpc_anti_nbins": 160,
+        "tpc_anti_xmin": 0.5,
+        "tpc_anti_xmax": 4.5,
+        "trial_enabled": False,
+        "mc_hist_suffix": "He4",
+        "mc_pt_corr_col": "ptHe4",
+        "mc_delta_x_col": "ptUncorr",
+    },
+}
+PARTICLE_CONFIGS = copy.deepcopy(DEFAULT_PARTICLE_CONFIGS)
+
+
+def _refresh_particle_configs() -> None:
+    global PARTICLE_CONFIGS
+    PARTICLE_CONFIGS = copy.deepcopy(DEFAULT_PARTICLE_CONFIGS)
+    PARTICLE_CONFIGS["he3"]["tof_nsigma_cut"] = HE3_NSIGMA_TOF_CUT
+    PARTICLE_CONFIGS["he4"]["tof_nsigma_cut"] = HE4_NSIGMA_TOF_CUT
+    PARTICLE_CONFIGS["he3"]["trial_dca_sel"] = HE3_TRIAL_DCA_SELECTION
+    PARTICLE_CONFIGS["he4"]["trial_dca_sel"] = ""
+    PARTICLE_CONFIGS["he3"]["base_sel"] = BASE_REC_SELECTIONS
+    PARTICLE_CONFIGS["he3"]["primary_sel"] = DEFAULT_REC_SELECTIONS
+    PARTICLE_CONFIGS["he4"]["base_sel"] = HE4_BASE_SELECTION
+    PARTICLE_CONFIGS["he4"]["primary_sel"] = HE4_PRIMARY_SELECTION
+    PARTICLE_CONFIGS["he3"]["secondary_sel"] = SECONDARY_SELECTION
+    PARTICLE_CONFIGS["he4"]["secondary_sel"] = SECONDARY_SELECTION
+    PARTICLE_CONFIGS["he3"]["mc_reco_base_sel"] = BASE_REC_SELECTIONS + HE3_MC_RECO_APPEND
+    PARTICLE_CONFIGS["he3"]["mc_reco_sel"] = DEFAULT_REC_SELECTIONS
+    PARTICLE_CONFIGS["he3"]["mc_gen_sel"] = HE3_MC_GEN_SELECTION
+    PARTICLE_CONFIGS["he3"]["mc_signal_tracking"] = ""
+    PARTICLE_CONFIGS["he4"]["mc_reco_base_sel"] = ""
+    PARTICLE_CONFIGS["he4"]["mc_reco_sel"] = HE4_MC_RECO_SELECTION
+    PARTICLE_CONFIGS["he4"]["mc_gen_sel"] = HE4_MC_GEN_SELECTION
+    PARTICLE_CONFIGS["he4"]["mc_signal_tracking"] = HE4_MC_SIGNAL_TRACKING
+
 
 def recompute_derived_globals() -> None:
     global BASE_OUTPUT_DIR
@@ -97,7 +175,7 @@ def apply_runtime_overrides(cfg: dict[str, Any]) -> None:
     global HE3_MC_RECO_APPEND, HE3_MC_GEN_SELECTION, HE4_MC_PID_SELECTION, HE4_MC_RECO_SELECTION
     global HE4_MC_GEN_SELECTION, HE4_MC_SIGNAL_TRACKING
     global N_PT_BINS, PT_BINS, PT_BIN_ARRAY, CENT_PT_LIMITS, TPC_MAX_PT, TOF_MIN_PT, PT_RANGE
-    global TPC_FUNCTION_NAMES, CUT_NAMES
+    global TPC_FUNCTION_NAMES, CUT_NAMES, PARTICLE_CONFIGS
 
     common = cfg.get("common", {})
     selections = cfg.get("selections", {})
@@ -162,7 +240,26 @@ def apply_runtime_overrides(cfg: dict[str, Any]) -> None:
     CUT_NAMES["nITScls"] = [float(v) for v in cuts.get("nITScls", CUT_NAMES["nITScls"])]
     CUT_NAMES["nsigmaTPC"] = [float(v) for v in cuts.get("nsigmaTPC", CUT_NAMES["nsigmaTPC"])]
 
+    _refresh_particle_configs()
+
+    particle_cfg = cfg.get("particle", {})
+    if isinstance(particle_cfg, dict):
+        for key in ("he3", "he4"):
+            override = particle_cfg.get(key, {})
+            if not isinstance(override, dict):
+                continue
+            for pkey, pval in override.items():
+                if pkey in PARTICLE_CONFIGS[key]:
+                    PARTICLE_CONFIGS[key][pkey] = pval
+
     recompute_derived_globals()
 
 
+def get_particle_config(species: str) -> dict[str, Any]:
+    if species not in PARTICLE_CONFIGS:
+        raise ValueError(f"Unsupported species '{species}'. Available: {', '.join(sorted(PARTICLE_CONFIGS))}.")
+    return copy.deepcopy(PARTICLE_CONFIGS[species])
+
+
 recompute_derived_globals()
+_refresh_particle_configs()

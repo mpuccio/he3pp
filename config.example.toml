@@ -66,23 +66,39 @@ fit_tail = "single"
 # TPC-only signal model shown in report and used in summary table.
 tpc_signal_model = "ExpGaus"
 
+[particle.he3]
+# Optional particle profile overrides (future-proofing).
+# name = "he3"
+# anti_name = "antihe3"
+# mass = 2.80839
+# pdg_abs = 1000020030
+# mc_hist_suffix = "He3"
+
+[particle.he4]
+# Optional particle profile overrides (future-proofing).
+# name = "he4"
+# anti_name = "antihe4"
+# mass = 3.72738
+# pdg_abs = 1000020040
+# mc_hist_suffix = "He4"
+
 [paths]
 # Optional overrides only.
 # All standard input/output locations are derived from [common].
 data_tree = "$NUCLEI_INPUT/data/LHC24/apass1/AO2D_skimmed.root"
-data_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/DataHistos.root"
-data_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/DataHistos.root"
+data_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/DataHistos.root"
+data_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/DataHistos.root"
 mc_tree = "$NUCLEI_INPUT/MC/LHC25b9/AO2D_coalescence.root"
-mc_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/MChistos.root"
-mc_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/MChistos.root"
-signal_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/signal.root"
-signal_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/signal.root"
-systematics_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/systematics.root"
-systematics_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/systematics.root"
+mc_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/MChistos.root"
+mc_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/MChistos.root"
+signal_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/signal.root"
+signal_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/signal.root"
+systematics_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/systematics.root"
+systematics_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/systematics.root"
 log_file = ""
-metadata_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/run_metadata.json"
-report_dir = "$NUCLEI_OUTPUT/LHC24/apass1/default/report"
-checkpoint_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/checkpoint.root"
+metadata_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/run_metadata.json"
+report_dir = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/report"
+checkpoint_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/checkpoint.root"
 
 # data_analysis_results is derived from [common] period/reco_pass (+ data_analysis_results_basename).
 mc_analysis_results = "$NUCLEI_INPUT/MC/LHC25b9/MChistos_new_final.root"
