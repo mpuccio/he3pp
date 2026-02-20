@@ -119,22 +119,9 @@ def default_config() -> dict:
             "he4": copy.deepcopy(s.DEFAULT_PARTICLE_CONFIGS["he4"]),
         },
         "paths": {
-            "data_tree": s.DATA_TREE_FILENAME,
-            "data_output": s.DATA_FILENAME,
-            "data_input": s.DATA_FILENAME,
-            "mc_tree": s.MC_TREE_FILENAME,
-            "mc_output": s.MC_FILENAME,
-            "mc_input": s.MC_FILENAME,
-            "signal_input": s.SIGNAL_OUTPUT,
-            "signal_output": s.SIGNAL_OUTPUT,
-            "systematics_input": s.SYSTEMATICS_OUTPUT,
-            "systematics_output": s.SYSTEMATICS_OUTPUT,
-            "data_analysis_results": s.DATA_ANALYSIS_RESULTS,
-            "mc_analysis_results": s.MC_ANALYSIS_RESULTS,
-            "checkpoint_output": "",
             "metadata_output": f"{s.BASE_VARIANT_OUTPUT_DIR}run_metadata.json",
             "log_file": "",
-            "report_dir": f"{s.BASE_VARIANT_OUTPUT_DIR}report",
+            "checkpoint_output": "",
         },
     }
 
@@ -194,8 +181,7 @@ def run(cfg: dict, user_cfg: dict | None = None) -> None:
     if not isinstance(user_paths, dict):
         user_paths = {}
 
-    path_cfg = dict(default_config()["paths"])
-    path_cfg.update(cfg.get("paths", {}))
+    path_cfg = dict(cfg.get("paths", {}))
     species_defaults = _species_stage_paths(species)
     for key, value in species_defaults.items():
         if key not in user_paths:

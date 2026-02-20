@@ -63,13 +63,13 @@ python3 he3_cli.py --config config.example.toml --dump-default-config
 - `[cuts]`: trial scan grids (`nsigmaDCAz`, `fTPCnCls`, `nITScls`, `nsigmaTPC`)
 - `[run]`: task + runtime flags
 - `[particle.he3]` / `[particle.he4]`: optional particle-profile overrides (mass, PDG, labels, key column names)
-- `[paths]`: optional non-derivable overrides (most IO paths are auto-derived)
+- `[paths]`: optional overrides only (all standard IO paths are auto-derived from `[common]` + `run.species`)
 
 Logging and metadata:
 
 - `[run].log_level`: `DEBUG|INFO|WARNING|ERROR`
 - `[paths].log_file`: optional log file path
-- `[paths].metadata_output`: JSON metadata output for each run
+- `[paths].metadata_output`: optional JSON metadata output path (otherwise auto-derived per species)
 
 Report controls:
 
@@ -85,7 +85,7 @@ Available report sections include:
 Single-particle mode:
 - Select one species with `[run].species`
 - Provide the matching selection section (`[selections.he3]` or `[selections.he4]`)
-- Use task-specific keys under `[paths]` (`data_tree`, `data_output`, `mc_tree`, `mc_output`, etc.)
+- Use task-specific keys under `[paths]` only when you need custom routing (`data_tree`, `mc_tree`, `*_output`, `*_input`, `report_dir`, etc.)
 
 ## Tasks
 

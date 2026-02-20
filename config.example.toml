@@ -84,21 +84,16 @@ tpc_signal_model = "ExpGaus"
 
 [paths]
 # Optional overrides only.
-# All standard input/output locations are derived from [common].
-data_tree = "$NUCLEI_INPUT/data/LHC24/apass1/AO2D_skimmed.root"
-data_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/DataHistos.root"
-data_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/DataHistos.root"
-mc_tree = "$NUCLEI_INPUT/MC/LHC25b9/AO2D_coalescence.root"
-mc_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/MChistos.root"
-mc_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/MChistos.root"
-signal_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/signal.root"
-signal_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/signal.root"
-systematics_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/systematics.root"
-systematics_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/systematics.root"
+# Most paths are derived automatically from [common] and run.species.
+# Uncomment only when you really need custom routing:
+# data_tree = "$NUCLEI_INPUT/data/LHC24/apass1/AO2D_skimmed.root"
+# mc_tree = "$NUCLEI_INPUT/MC/LHC25b9/AO2D_coalescence.root"
+# data_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/DataHistos.root"
+# mc_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/MChistos.root"
+# signal_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/signal.root"
+# systematics_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/systematics.root"
+# report_dir = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/report"
+# metadata_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/run_metadata.json"
 log_file = ""
-metadata_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/run_metadata.json"
-report_dir = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/report"
-checkpoint_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/checkpoint.root"
-
-# data_analysis_results is derived from [common] period/reco_pass (+ data_analysis_results_basename).
-mc_analysis_results = "$NUCLEI_INPUT/MC/LHC25b9/MChistos_new_final.root"
+# Optional: enable checkpoint artifact (otherwise checkpoint is skipped in full_chain).
+# checkpoint_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/he3/checkpoint.root"
