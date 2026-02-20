@@ -4,6 +4,7 @@
 #include <TCanvas.h>
 #include <TLegend.h>
 #include "src/Common.h"
+#include "EventFiltering/ZorroSummary.h"
 
 void Systematics() {
   TFile fData(kSignalOutput.data());
@@ -13,13 +14,18 @@ void Systematics() {
   TH1* hNtvx = (TH1*)anResults.Get("bc-selection-task/hCounterTVX");
   TH1* hNcol = (TH1*)anResults.Get("event-selection-task/hColCounterAcc");
   TH1* hNvtx = (TH1*)anResults.Get("nuclei-spectra/spectra/hRecVtxZData");
+  ZorroSummary* zorroSummary = (ZorroSummary*)anResults.Get("nuclei-spectra/zorroSummary");
   double nVerticesNoCut{hNcol->GetEntries()};
   double nVertices{hNvtx->GetEntries()};
-  double nTVX{hNtvx->GetEntries()};
+  double nTVX{zorroSummary ? zorroSummary->getNormalisationFactor(0) : hNtvx->GetEntries()};
   double effTVX{0.756};
   double vertexingEff{0.921};
   // double norm{nTVX * vertexingEff / effTVX};
-  double norm{nVertices};
+  // double norm{nVertices};
+  double norm{nTVX / effTVX};
+
+  TFile corr("checkRapidity.root");
+  TH1* hRapRatio = (TH1*)corr.Get("rapRatio");
 
   TH2D *systTPC[2];
   TH2D *systTOF[2];
@@ -174,9 +180,10 @@ void Systematics() {
     hPub->SetBinError(i, ey[i-1]);
     hPubSyst->SetBinError(i, sy[i-1]);
   }
+  hPub->Multiply(hRapRatio);
+  hPubSyst->Multiply(hRapRatio);
   hPub->Write("pubStat");
   hPubSyst->Write("pubSyst");
-
 
   for (int iS{0}; iS < 2; ++iS) {
     TH1D* fStatTPC = (TH1D*)defaultTPCuncorr[iS]->Clone(Form("fStatTPC%c", kLetter[iS]));
@@ -263,6 +270,17 @@ void Systematics() {
     fStatTOF->Divide(hPub);
     fStatTPC->Write(Form("ratioPubTPC%c", kLetter[iS]));
     fStatTOF->Write(Form("ratioPubTOF%c", kLetter[iS]));
+
+    if (hRapRatio) {
+      std::cout << "Correcting for rapidity" << std::endl;
+      // for (int iB{1}; iB <= fStatTPC->GetNbinsX(); ++iB) {
+      //   int iR = hRapRatio->FindBin(fStatTPC->GetBinCenter(iB));
+      //   fStatTPC->SetBinContent(iB, fStatTPC->GetBinContent(iB) / hRapRatio->GetBinContent(iR));
+      //   fStatTOF->SetBinContent(iB, fStatTOF->GetBinContent(iB) / hRapRatio->GetBinContent(iR));
+      // }
+      fStatTPC->Write(Form("ratioRapTPC%c", kLetter[iS]));
+      fStatTOF->Write(Form("ratioRapTOF%c", kLetter[iS]));
+    }
 
   }
 }

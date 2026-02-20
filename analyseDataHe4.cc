@@ -7,12 +7,17 @@
 #include <cmath>
 #include <iostream>
 #include "src/Common.h"
+#include "src/Utils.h"
+
 
 void analyseDataHe4(std::string inputFileName = kDataTreeFilename, std::string outputFileName = kDataFilenameHe4)
 {
   gStyle->SetOptStat(0);
   ROOT::EnableImplicitMT();
-  ROOT::RDataFrame d("O2nucleitable", inputFileName);
+  TChain chain("O2nucleitable");
+  utils::createChain(chain, inputFileName, "O2nucleitable");
+
+  ROOT::RDataFrame d(chain);
   auto dfBase = defineColumnsForData(d).Filter("fTPCnCls >= 110 && nITScls >= 5 && abs(fEta) < 0.9 && std::abs(fDCAxy) < 0.7 && ptHe4 > 0.5 && ptHe4 < 9.0");
   auto dfPrimary = dfBase.Filter("fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) < 7 && std::abs(fDCAxy) < 0.2");
   auto dfSecondary = dfBase.Filter("fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) > 7 && std::abs(fDCAxy) < 0.2");
@@ -33,6 +38,9 @@ void analyseDataHe4(std::string inputFileName = kDataTreeFilename, std::string o
 
   hTOFAHe3.push_back(dfPrimary.Filter("!matter && std::abs(nsigmaHe4) < 3").Histo2D({"fATOFsignal", ";#it{p}_{T}^{rec} (GeV/#it{c});m_{TOF}-m_{^{4}#bar{He}};Counts", kNPtBins, kPtBins, 100, -0.9, 1.1}, "ptHe4", "deltaMassHe4"));
   hTOFMHe3.push_back(dfPrimary.Filter("matter && std::abs(nsigmaHe4) < 3").Histo2D({"fMTOFsignal", ";#it{p}_{T}^{rec} (GeV/#it{c});m_{TOF}-m_{^{4}He};Counts", kNPtBins, kPtBins, 100, -0.9, 1.1}, "ptHe4", "deltaMassHe4"));
+
+  auto hMTPCnSigmaMass = dfPrimary.Filter("matter && ptHe4 > 2").Histo2D({"hMTPCnSigmaMass", ";#it{p}_{T}^{rec} (GeV/#it{c});m_{TOF}-m_{^{4}He} (GeV/#it{c}^{2});Counts", 100, -5, 5, 100, -0.9, 1.1}, "nsigmaHe4", "deltaMassHe4");
+  auto hATPCnSigmaMass = dfPrimary.Filter("!matter && ptHe4 > 2").Histo2D({"hATPCnSigmaMass", ";#it{p}_{T}^{rec} (GeV/#it{c});m_{TOF}-m_{^{4}#bar{He}} (GeV/#it{c}^{2});Counts", 100, -5, 5, 100, -0.9, 1.1}, "nsigmaHe4", "deltaMassHe4");
 
   int iTrial{0};
   // for (size_t iDCAz{0}; iDCAz < kCutNames["nsigmaDCAz"].size(); ++iDCAz)
@@ -83,7 +91,12 @@ void analyseDataHe4(std::string inputFileName = kDataTreeFilename, std::string o
   hDCAxySecondaryAHe3[0]->GetZaxis()->SetRangeUser(hDCAxySecondaryMHe3[0]->GetMinimum(), hDCAxySecondaryMHe3[0]->GetMaximum());
   hDCAxySecondaryAHe3[0]->DrawClone("colz");
 
-  TFile outputFile(outputFileName.data(), "recreate");
+  cv = new TCanvas;
+  hMTPCnSigmaMass->DrawClone("colz");
+  cv = new TCanvas;
+  hATPCnSigmaMass->DrawClone("colz");
+
+  TFile outputFile("he4.root", "recreate");
   auto dir = outputFile.mkdir("nuclei");
   dir->cd();
   hTPCAHe3[0]->Write("fATPCcounts");

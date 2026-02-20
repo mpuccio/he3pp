@@ -6,6 +6,7 @@
 #include <cmath>
 #include <iostream>
 #include "src/Common.h"
+#include "src/Utils.h"
 
 void DivideBinomial(TH1* res, TH1* num, TH1* den) {
   for (int i = 1; i <= res->GetNbinsX(); i++) {
@@ -29,7 +30,10 @@ void analyseMC(std::string inputFileName = kMCtreeFilename, std::string outputFi
   outputFileName = gSystem->ExpandPathName(outputFileName.data());
   gStyle->SetOptStat(0);
   ROOT::EnableImplicitMT();
-  ROOT::RDataFrame d("O2nucleitablemc", inputFileName);
+  TChain chain("O2nucleitablemc");
+  chain.AddFile(inputFileName.data());
+  // utils::createChain(chain, inputFileName, "O2nucleitablemc");
+  ROOT::RDataFrame d(chain);
   auto dfData = defineColumnsForData(d);
   auto df = dfData.Define("gP", "fgPt * std::cosh(fgEta)")
                   .Define("gM", "std::abs(fPDGcode) == 1000020030 ? 2.809230089 : (std::abs(fPDGcode) == 1000010030 ? 2.80892 : (std::abs(fPDGcode) == 1000020040 ? 3.72738 : (std::abs(fPDGcode) == 1000010020 ? 1.87561 : 0.1)))")

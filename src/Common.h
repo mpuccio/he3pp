@@ -2,6 +2,7 @@
 #define COMMON_H
 
 #include "ROOT/RDataFrame.hxx"
+#include "Common/DataModel/PIDResponseITS.h"
 
 #include <iostream>
 #include <map>
@@ -24,14 +25,14 @@ const string kLabels[2] = {"^{3}He","^{3}#bar{He}"};
 
 // const string kMCproduction = "LHC24b2";
 const string kMCproduction = "LHC23j6b";
-const string kRecoPass = "apass4";
-const string kPeriod = "LHC22";
-const string kVariant = "giovanni";
+const string kRecoPass = "apass1";
+const string kPeriod = "LHC24";
+const string kVariant = "_pub"; //"_new_final";
 
 const string kBaseOutputDir = "$NUCLEI_OUTPUT/" + kPeriod + "/" + kRecoPass + "/";
 const string kBaseInputDir = "$NUCLEI_INPUT/";
 
-const string kDataTreeFilename = kBaseInputDir + "data/" + kPeriod + "/" + kRecoPass + "/MergedAO2D.root";
+const string kDataTreeFilename = kBaseInputDir + "data/" + kPeriod + "/" + kRecoPass + "/AO2D_skimmed.root";
 const string kDataFilename = kBaseInputDir + "data/" + kPeriod + "/" + kRecoPass + "/DataHistos" + kVariant + ".root";
 const string kDataFilenameHe4 = kBaseInputDir + "data/" + kPeriod + "/" + kRecoPass + "/DataHistosHe4" + kVariant + ".root";
 const string kDataAnalysisResults = kBaseInputDir + "data/" + kPeriod + "/" + kRecoPass + "/AnalysisResults.root";
@@ -42,7 +43,7 @@ const string kMCfilenameHe4 = kBaseInputDir + "MC/" + kMCproduction + "/MChistos
 
 const string kFilterListNames = "nuclei";
 
-const string kBaseRecSelections = "fTPCnCls >= 110 && nITScls >= 5 && std::abs(fEta) < 0.9 && std::abs(fDCAxy) < 0.7 && pt > 0.8 && pt < 9.0";
+const string kBaseRecSelections = "fTPCnCls >= 110 && nITScls >= 5 && std::abs(fEta) < 0.9 && std::abs(yHe3) < 0.5 && std::abs(fDCAxy) < 0.7 && pt >= 1. && pt < 7.0 && nsigmaITS > -5";
 const string kDefaultRecSelections = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) < 7 && std::abs(fDCAxy) < 0.2";
 
 const string kSignalOutput = kBaseOutputDir + "signal" + kVariant + ".root";
@@ -51,17 +52,25 @@ const string kSystematicsOutput = kBaseOutputDir + "systematics" + kVariant + ".
 // constexpr int    kNPtBins = 11;
 // constexpr double  kPtBins[kNPtBins+1] = {1.0, 1.2, 1.4, 1.8, 2.2, 2.6, 3.2,4.0,4.8,5.8,7,9};
 
-constexpr int    kNPtBins = 12;
-constexpr double  kPtBins[kNPtBins+1] = {1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0};
+// constexpr int    kNPtBins = 17;
+// constexpr double  kPtBins[kNPtBins+1] = {1.0, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0, 4.25, 4.5, 5.0, 5.5, 6.0, 7.0};
+
+// Publication binning
+constexpr int    kNPtBins = 6;
+constexpr double  kPtBins[kNPtBins+1] = {1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0};
+
+/// Hypertriton binning
+// constexpr int kNPtBins = 4;
+// constexpr double kPtBins[kNPtBins + 1] = {1.5, 2., 2.5, 3.5, 5};
 
 const int    kCentLength = 1;
 const int    kCentBinsArray[kCentLength][2] = {{2,2}};
 const float  kCentPtLimits[kCentLength] = {7};
 const float  kCentLabels[kCentLength][2] = {{0.,100.}};
 
-const float  kTPCmaxPt = 7.0f;
+const float  kTPCmaxPt = 9.0f;
 const float  kTOFminPt = 1.f;
-const float  kPtRange[2] = {1.4,7};
+const float  kPtRange[2] = {1.4,9};
 
 const bool   kUseBarlow{true};
 const float  kAbsSyst[2] = {0.08,0.1f};
@@ -116,6 +125,7 @@ auto defineColumnsForData(ROOT::RDataFrame& d) {
           .Define("ptHe4step1", "ptUncorr + 0.0419608 + 1.75861 * std::exp(-1.4019 * ptUncorr)")
           .Define("ptHe4", "ptHe4step1 + 0.00385223 - 0.442353 * std::exp(-1.59049 * ptHe4step1)")
           .Define("p", "pt * cosh(fEta)")
+          .Define("rigidityUncorr", "std::abs(fPt) * cosh(fEta)")
           .Define("tofMass", "fBeta < 1.e-3 ? 1.e9 : fBeta >= 1. ? 0 : fTPCInnerParam * 2 * sqrt(1.f / (fBeta * fBeta) - 1.f)")
           .Define("matter", "fPt > 0")
           .Define("pidForTracking", "fFlags >> 12")
@@ -135,7 +145,8 @@ auto defineColumnsForData(ROOT::RDataFrame& d) {
           .Define("hasGoodTOFmassHe3", "!hasTOF || std::abs(deltaMassHe3) < 0.6")
           .Define("hasGoodTOFmassHe4", "!hasTOF || std::abs(deltaMassHe4) < 0.3")
           .Define("nsigmaDCAxy", nSigmaDCAxy, {"pt", "fDCAxy"})
-          .Define("nsigmaDCAz", nSigmaDCAz, {"pt", "fDCAz"});
+          .Define("nsigmaDCAz", nSigmaDCAz, {"pt", "fDCAz"})
+          .Define("nsigmaITS", o2::aod::ITSResponse::nSigmaITS<o2::track::PID::Helium3>, {"fITSclusterSizes", "rigidityUncorr", "fEta"});
 }
 
 

@@ -12,6 +12,7 @@
 #include <TH1.h>
 #include <TList.h>
 #include <TObject.h>
+#include <TKey.h>
 
 namespace utils {
 
@@ -75,6 +76,18 @@ namespace utils {
     }
     return efftof;
   }
+
+  void createChain(TChain& chainD, const std::string &filename, const std::string &treename) {
+  TFile fileD(filename.c_str());
+  TIter next(fileD.GetListOfKeys());
+  TKey *key;
+  while ((key = (TKey*)next())) {
+    std::string keyName = key->GetName();
+    if (keyName.find("DF_") != std::string::npos) {
+      chainD.Add((filename + "/" + keyName + "/" + chainD.GetName()).c_str());
+    }
+  }
+}
 }
 
 #endif

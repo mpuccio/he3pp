@@ -7,12 +7,15 @@
 #include <cmath>
 #include <iostream>
 #include "src/Common.h"
+#include "src/Utils.h"
 
 void analyseData(std::string inputFileName = kDataTreeFilename, std::string outputFileName = kDataFilename, bool skim = false)
 {
   gStyle->SetOptStat(0);
   ROOT::EnableImplicitMT();
-  ROOT::RDataFrame d("O2nucleitable", inputFileName);
+  TChain chain("O2nucleitable");
+  utils::createChain(chain, inputFileName, "O2nucleitable");
+  ROOT::RDataFrame d(chain);
   auto dfBase = defineColumnsForData(d).Filter(kBaseRecSelections.data());
   auto dfPrimary = dfBase.Filter(kDefaultRecSelections.data());
   auto dfSecondary = dfBase.Filter("fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) > 7 && std::abs(fDCAxy) < 0.2");
@@ -24,18 +27,18 @@ void analyseData(std::string inputFileName = kDataTreeFilename, std::string outp
 
   std::vector<ROOT::RDF::RResultPtr<TH2D>> hDCAxyAHe3, hDCAxyMHe3, hDCAxySecondaryMHe3, hDCAxySecondaryAHe3, hDCAzAHe3, hDCAzMHe3, hTPCAHe3, hTPCMHe3, hTOFAHe3, hTOFMHe3;
 
-  hDCAxyAHe3.push_back(dfPrimary.Filter("!matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({"hDCAxyAHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", kNPtBins, kPtBins, 100, -0.2, 0.2}, "pt", "fDCAxy"));
-  hDCAxyMHe3.push_back(dfPrimary.Filter("matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({"hDCAxyMHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", kNPtBins, kPtBins, 100, -0.2, 0.2}, "pt", "fDCAxy"));
-  hDCAzAHe3.push_back(dfPrimary.Filter("!matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({"hDCAzAHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{z} (cm);Counts", kNPtBins, kPtBins, 100, -0.2, 0.2}, "pt", "fDCAz"));
-  hDCAzMHe3.push_back(dfPrimary.Filter("matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({"hDCAzMHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{z} (cm);Counts", kNPtBins, kPtBins, 100, -0.2, 0.2}, "pt", "fDCAz"));
-  hDCAxySecondaryMHe3.push_back(dfSecondary.Filter("matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({"hDCAxySecondaryMHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", kNPtBins, kPtBins, 100, -0.2, 0.2}, "pt", "fDCAxy"));
-  hDCAxySecondaryAHe3.push_back(dfSecondary.Filter("!matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({"hDCAxySecondaryAHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", kNPtBins, kPtBins, 100, -0.2, 0.2}, "pt", "fDCAxy"));
+  hDCAxyAHe3.push_back(dfPrimary.Filter("!matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({"hDCAxyAHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", kNPtBins, kPtBins, 100, -0.2, 0.2}, "ptUncorr", "fDCAxy"));
+  hDCAxyMHe3.push_back(dfPrimary.Filter("matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({"hDCAxyMHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", kNPtBins, kPtBins, 100, -0.2, 0.2}, "ptUncorr", "fDCAxy"));
+  hDCAzAHe3.push_back(dfPrimary.Filter("!matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({"hDCAzAHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{z} (cm);Counts", kNPtBins, kPtBins, 100, -0.2, 0.2}, "ptUncorr", "fDCAz"));
+  hDCAzMHe3.push_back(dfPrimary.Filter("matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({"hDCAzMHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{z} (cm);Counts", kNPtBins, kPtBins, 100, -0.2, 0.2}, "ptUncorr", "fDCAz"));
+  hDCAxySecondaryMHe3.push_back(dfSecondary.Filter("matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({"hDCAxySecondaryMHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", kNPtBins, kPtBins, 100, -0.2, 0.2}, "ptUncorr", "fDCAxy"));
+  hDCAxySecondaryAHe3.push_back(dfSecondary.Filter("!matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({"hDCAxySecondaryAHe3", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", kNPtBins, kPtBins, 100, -0.2, 0.2}, "ptUncorr", "fDCAxy"));
 
-  hTPCAHe3.push_back(dfPrimary.Filter("!matter && hasGoodTOFmassHe3").Histo2D({"fATPCcounts", ";#it{p}_{T}^{rec} (GeV/#it{c});^{3}#bar{He} n#sigma_{TPC};Counts", kNPtBins, kPtBins, 100, -5, 5}, "pt", "nsigmaHe3"));
-  hTPCMHe3.push_back(dfPrimary.Filter("matter && hasGoodTOFmassHe3").Histo2D({"fMTPCcounts", ";#it{p}_{T}^{rec} (GeV/#it{c});^{3}He n#sigma_{TPC};Counts", kNPtBins, kPtBins, 100, -5, 5}, "pt", "nsigmaHe3"));
+  hTPCAHe3.push_back(dfPrimary.Filter("!matter && hasGoodTOFmassHe3").Histo2D({"fATPCcounts", ";#it{p}_{T}^{rec} (GeV/#it{c});^{3}#bar{He} n#sigma_{TPC};Counts", kNPtBins, kPtBins, 100, -5, 5}, "ptUncorr", "nsigmaHe3"));
+  hTPCMHe3.push_back(dfPrimary.Filter("matter && hasGoodTOFmassHe3").Histo2D({"fMTPCcounts", ";#it{p}_{T}^{rec} (GeV/#it{c});^{3}He n#sigma_{TPC};Counts", kNPtBins, kPtBins, 100, -5, 5}, "ptUncorr", "nsigmaHe3"));
 
-  hTOFAHe3.push_back(dfPrimary.Filter("!matter && std::abs(nsigmaHe3) < 3.5").Histo2D({"fATOFsignal", ";#it{p}_{T}^{rec} (GeV/#it{c});m_{TOF}-m_{^{3}#bar{He}};Counts", kNPtBins, kPtBins, 100, -0.9, 1.1}, "pt", "deltaMassHe3"));
-  hTOFMHe3.push_back(dfPrimary.Filter("matter && std::abs(nsigmaHe3) < 3.5").Histo2D({"fMTOFsignal", ";#it{p}_{T}^{rec} (GeV/#it{c});m_{TOF}-m_{^{3}He};Counts", kNPtBins, kPtBins, 100, -0.9, 1.1}, "pt", "deltaMassHe3"));
+  hTOFAHe3.push_back(dfPrimary.Filter("!matter && std::abs(nsigmaHe3) < 3.5").Histo2D({"fATOFsignal", ";#it{p}_{T}^{rec} (GeV/#it{c});m_{TOF}-m_{^{3}#bar{He}};Counts", kNPtBins, kPtBins, 100, -0.9, 1.1}, "ptUncorr", "deltaMassHe3"));
+  hTOFMHe3.push_back(dfPrimary.Filter("matter && std::abs(nsigmaHe3) < 3.5").Histo2D({"fMTOFsignal", ";#it{p}_{T}^{rec} (GeV/#it{c});m_{TOF}-m_{^{3}He};Counts", kNPtBins, kPtBins, 100, -0.9, 1.1}, "ptUncorr", "deltaMassHe3"));
 
   int iTrial{0};
   for (size_t iDCAz{0}; iDCAz < kCutNames["nsigmaDCAz"].size(); ++iDCAz)
@@ -47,16 +50,16 @@ void analyseData(std::string inputFileName = kDataTreeFilename, std::string outp
       for (size_t iITScls{0}; iITScls < kCutNames["nITScls"].size(); ++iITScls)
       {
         auto dfITScls = dfTPCcls.Filter("nITScls >= " + std::to_string(kCutNames["nITScls"][iITScls]));
-        hDCAxyAHe3.push_back(dfITScls.Filter("!matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({Form("hDCAxyAHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", kNPtBins, kPtBins, 560, -0.7, 0.7}, "pt", "fDCAxy"));
-        hDCAxyMHe3.push_back(dfITScls.Filter("matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({Form("hDCAxyMHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", kNPtBins, kPtBins, 560, -0.7, 0.7}, "pt", "fDCAxy"));
-        hDCAzAHe3.push_back(dfITScls.Filter("!matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({Form("hDCzAHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", kNPtBins, kPtBins, 560, -0.7, 0.7}, "pt", "fDCAz"));
-        hDCAzMHe3.push_back(dfITScls.Filter("matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({Form("hDCAzMHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", kNPtBins, kPtBins, 560, -0.7, 0.7}, "pt", "fDCAz"));
+        hDCAxyAHe3.push_back(dfITScls.Filter("!matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({Form("hDCAxyAHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", kNPtBins, kPtBins, 560, -0.7, 0.7}, "ptUncorr", "fDCAxy"));
+        hDCAxyMHe3.push_back(dfITScls.Filter("matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({Form("hDCAxyMHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", kNPtBins, kPtBins, 560, -0.7, 0.7}, "ptUncorr", "fDCAxy"));
+        hDCAzAHe3.push_back(dfITScls.Filter("!matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({Form("hDCzAHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", kNPtBins, kPtBins, 560, -0.7, 0.7}, "ptUncorr", "fDCAz"));
+        hDCAzMHe3.push_back(dfITScls.Filter("matter && nsigmaHe3 > -0.5 && nsigmaHe3 < 3 && hasGoodTOFmassHe3").Histo2D({Form("hDCAzMHe3%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", kNPtBins, kPtBins, 560, -0.7, 0.7}, "ptUncorr", "fDCAz"));
 
-        hTPCAHe3.push_back(dfITScls.Filter("!matter && std::abs(fDCAxy) < 0.2 && hasGoodTOFmassHe3").Histo2D({Form("fATPCcounts%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});^{3}#bar{He} n#sigma_{TPC};Counts", kNPtBins, kPtBins, 100, -5, 5}, "pt", "nsigmaHe3"));
-        hTPCMHe3.push_back(dfITScls.Filter("matter && std::abs(fDCAxy) < 0.2 && hasGoodTOFmassHe3").Histo2D({Form("fMTPCcounts%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});^{3}He n#sigma_{TPC};Counts", kNPtBins, kPtBins, 100, -5, 5}, "pt", "nsigmaHe3"));
+        hTPCAHe3.push_back(dfITScls.Filter("!matter && std::abs(fDCAxy) < 0.2 && hasGoodTOFmassHe3").Histo2D({Form("fATPCcounts%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});^{3}#bar{He} n#sigma_{TPC};Counts", kNPtBins, kPtBins, 100, -5, 5}, "ptUncorr", "nsigmaHe3"));
+        hTPCMHe3.push_back(dfITScls.Filter("matter && std::abs(fDCAxy) < 0.2 && hasGoodTOFmassHe3").Histo2D({Form("fMTPCcounts%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});^{3}He n#sigma_{TPC};Counts", kNPtBins, kPtBins, 100, -5, 5}, "ptUncorr", "nsigmaHe3"));
 
-        hTOFAHe3.push_back(dfITScls.Filter("!matter && std::abs(fDCAxy) < 0.2 && std::abs(nsigmaHe3) < 3.5").Histo2D({Form("fATOFsignal%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});m_{TOF}-m_{^{3}#bar{He}};Counts", kNPtBins, kPtBins, 100, -0.9, 1.1}, "pt", "deltaMassHe3"));
-        hTOFMHe3.push_back(dfITScls.Filter("matter && std::abs(fDCAxy) < 0.2 && std::abs(nsigmaHe3) < 3.5").Histo2D({Form("fMTOFsignal%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});m_{TOF}-m_{^{3}He};Counts", kNPtBins, kPtBins, 100, -0.9, 1.1}, "pt", "deltaMassHe3"));
+        hTOFAHe3.push_back(dfITScls.Filter("!matter && std::abs(fDCAxy) < 0.2 && std::abs(nsigmaHe3) < 3.5").Histo2D({Form("fATOFsignal%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});m_{TOF}-m_{^{3}#bar{He}};Counts", kNPtBins, kPtBins, 100, -0.9, 1.1}, "ptUncorr", "deltaMassHe3"));
+        hTOFMHe3.push_back(dfITScls.Filter("matter && std::abs(fDCAxy) < 0.2 && std::abs(nsigmaHe3) < 3.5").Histo2D({Form("fMTOFsignal%i", iTrial), ";#it{p}_{T}^{rec} (GeV/#it{c});m_{TOF}-m_{^{3}He};Counts", kNPtBins, kPtBins, 100, -0.9, 1.1}, "ptUncorr", "deltaMassHe3"));
         iTrial++;
       }
     }
