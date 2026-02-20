@@ -48,85 +48,10 @@ def _write_metadata(path: str, payload: dict) -> None:
 
 
 def default_config() -> dict:
-    return {
-        "common": {
-            "period": s.PERIOD,
-            "reco_pass": s.RECO_PASS,
-            "mc_production": s.MC_PRODUCTION,
-            "variant": s.VARIANT,
-            "base_input_dir": s.BASE_INPUT_DIR,
-            "base_output_root": s.BASE_OUTPUT_ROOT,
-            "filter_list_name": s.FILTER_LIST_NAME,
-            "data_tree_basename": s.DATA_TREE_BASENAME,
-            "data_analysis_results_basename": s.DATA_ANALYSIS_RESULTS_BASENAME,
-            "mc_tree_basename": s.MC_TREE_BASENAME,
-            "mc_analysis_results_basename": s.MC_ANALYSIS_RESULTS_BASENAME,
-            "pt_bins": s.PT_BINS,
-            "cent_pt_limits": s.CENT_PT_LIMITS,
-            "tpc_max_pt": s.TPC_MAX_PT,
-            "tof_min_pt": s.TOF_MIN_PT,
-            "pt_range": s.PT_RANGE,
-            "tpc_function_names": s.TPC_FUNCTION_NAMES,
-        },
-        "selections": {
-            "common": {
-                "skim_template": s.SKIM_SELECTION_TEMPLATE,
-            },
-            "he3": {
-                "base_rec": s.BASE_REC_SELECTIONS,
-                "default_rec": s.DEFAULT_REC_SELECTIONS,
-                "secondary_rec": s.SECONDARY_SELECTION,
-                "trial_dca": s.HE3_TRIAL_DCA_SELECTION,
-                "nsigma_tof": s.HE3_NSIGMA_TOF_CUT,
-                "mc_reco_append": s.HE3_MC_RECO_APPEND,
-                "mc_gen": s.HE3_MC_GEN_SELECTION,
-            },
-            "he4": {
-                "base_rec": s.HE4_BASE_SELECTION,
-                "primary_rec": s.HE4_PRIMARY_SELECTION,
-                "secondary_rec": s.SECONDARY_SELECTION,
-                "nsigma_tof": s.HE4_NSIGMA_TOF_CUT,
-                "mc_pid": s.HE4_MC_PID_SELECTION,
-                "mc_reco": s.HE4_MC_RECO_SELECTION,
-                "mc_gen": s.HE4_MC_GEN_SELECTION,
-                "mc_signal_tracking": s.HE4_MC_SIGNAL_TRACKING,
-            },
-        },
-        "cuts": {
-            "nsigmaDCAz": s.CUT_NAMES["nsigmaDCAz"],
-            "fTPCnCls": s.CUT_NAMES["fTPCnCls"],
-            "nITScls": s.CUT_NAMES["nITScls"],
-            "nsigmaTPC": s.CUT_NAMES["nsigmaTPC"],
-        },
-        "run": {
-            "task": "analyse_data",
-            "species": "he3",
-            "enable_mt": True,
-            "nthreads": 0,
-            "enable_trials": True,
-            "skim": False,
-            "draw": False,
-            "log_level": "INFO",
-        },
-        "report": {
-            "sections": ["signal_tof", "signal_tpc", "tof_tpc_2d", "efficiency", "pt_resolution", "corrected_spectrum"],
-            "fit_alpha": 0.05,
-            "fit_tail": "single",
-            "tpc_signal_model": "ExpGaus",
-        },
-        "particle": {
-            "he3": copy.deepcopy(s.DEFAULT_PARTICLE_CONFIGS["he3"]),
-            "he4": copy.deepcopy(s.DEFAULT_PARTICLE_CONFIGS["he4"]),
-        },
-        "paths": {
-            "metadata_output": f"{s.BASE_VARIANT_OUTPUT_DIR}run_metadata.json",
-            "log_file": "",
-            "checkpoint_output": "",
-        },
-    }
+    return s.default_config_template()
 
 
-def _parse_species(run_cfg: dict) -> str:
+def _parse_species(run_cfg: dict, allowed_species: set[str]) -> str:
     raw = run_cfg.get("species")
     if raw is None:
         raise ValueError("Missing run.species in config.")
@@ -137,8 +62,10 @@ def _parse_species(run_cfg: dict) -> str:
         if len(values) != 1:
             raise ValueError("Single-particle mode: run.species must contain exactly one value.")
         value = values[0]
-    if value not in ("he3", "he4"):
-        raise ValueError(f"Unsupported run.species '{value}'. Allowed: he3, he4.")
+    if value not in allowed_species:
+        raise ValueError(
+            f"Unsupported run.species '{value}'. Allowed: {', '.join(sorted(allowed_species))}."
+        )
     return value
 
 
@@ -164,7 +91,15 @@ def run(cfg: dict, user_cfg: dict | None = None) -> None:
     report_cfg = cfg.get("report", {})
     path_cfg_for_log = cfg.get("paths", {})
     _setup_logging(str(run_cfg.get("log_level", "INFO")), str(path_cfg_for_log.get("log_file", "") or ""))
-    species = _parse_species(run_cfg)
+    particle_cfg = cfg.get("particle", {})
+    allowed_species = {
+        str(key).strip().lower()
+        for key, value in (particle_cfg.items() if isinstance(particle_cfg, dict) else [])
+        if isinstance(value, dict)
+    }
+    if not allowed_species:
+        allowed_species = {"he3", "he4"}
+    species = _parse_species(run_cfg, allowed_species)
     if str(run_cfg.get("task", "analyse_data")).lower() in {"analyse_data", "analyse_mc", "full_chain"}:
         sel_cfg = cfg.get("selections", {})
         if not isinstance(sel_cfg.get(species), dict):
@@ -378,7 +313,13 @@ def main() -> int:
             metadata_path = (cfg.get("paths", {}) if isinstance(cfg, dict) else {}).get("metadata_output")
             if not metadata_path:
                 try:
-                    species = _parse_species(merged.get("run", {}))
+                    particle_cfg = merged.get("particle", {})
+                    allowed_species = {
+                        str(key).strip().lower()
+                        for key, value in (particle_cfg.items() if isinstance(particle_cfg, dict) else [])
+                        if isinstance(value, dict)
+                    } or {"he3", "he4"}
+                    species = _parse_species(merged.get("run", {}), allowed_species)
                     metadata_path = _species_stage_paths(species)["metadata_output"]
                 except Exception:
                     metadata_path = merged.get("paths", {}).get("metadata_output", "run_metadata.json")

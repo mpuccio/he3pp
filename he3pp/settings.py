@@ -1,57 +1,109 @@
 from array import array
 import copy
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+try:
+    import tomllib  # Python 3.11+
+except ModuleNotFoundError:  # pragma: no cover - runtime compatibility path
+    import tomli as tomllib
+
+
+DEFAULTS_TOML = Path(__file__).with_name("defaults.toml")
+
+
+def _load_default_config_from_toml() -> dict[str, Any]:
+    with open(DEFAULTS_TOML, "rb") as f:
+        cfg = tomllib.load(f)
+    if not isinstance(cfg, dict):
+        raise ValueError(f"Invalid defaults TOML at {DEFAULTS_TOML}: top-level table is missing.")
+    return cfg
+
+
+DEFAULT_CONFIG = _load_default_config_from_toml()
+
+
+def default_config_template() -> dict[str, Any]:
+    return copy.deepcopy(DEFAULT_CONFIG)
+
+
+def _required_table(table: dict[str, Any], key: str, context: str = "defaults") -> dict[str, Any]:
+    value = table.get(key)
+    if not isinstance(value, dict):
+        raise ValueError(f"Missing or invalid [{key}] table in {context} TOML: {DEFAULTS_TOML}")
+    return value
+
+
+def _required_value(table: dict[str, Any], key: str, context: str) -> Any:
+    if key not in table:
+        raise ValueError(f"Missing required key '{context}.{key}' in {DEFAULTS_TOML}")
+    return table[key]
+
 
 LETTER = ["M", "A"]
 NAMES = ["he3", "antihe3"]
 LABELS = ["^{3}He", "^{3}#bar{He}"]
 
-MC_PRODUCTION = "LHC23j6b"
-RECO_PASS = "apass4"
-PERIOD = "LHC22"
-VARIANT = "giovanni"
-BASE_INPUT_DIR = "$NUCLEI_INPUT/"
-BASE_OUTPUT_ROOT = "$NUCLEI_OUTPUT/"
-FILTER_LIST_NAME = "nuclei"
-DATA_TREE_BASENAME = "AO2D.root"
-DATA_ANALYSIS_RESULTS_BASENAME = "AnalysisResults.root"
-MC_TREE_BASENAME = "AO2D_coalescence.root"
-MC_ANALYSIS_RESULTS_BASENAME = "AnalysisResults.root"
+_common_defaults = _required_table(DEFAULT_CONFIG, "common")
+_sel_defaults = _required_table(DEFAULT_CONFIG, "selections")
+_sel_common_defaults = _required_table(_sel_defaults, "common", "selections")
+_sel_he3_defaults = _required_table(_sel_defaults, "he3", "selections")
+_sel_he4_defaults = _required_table(_sel_defaults, "he4", "selections")
+_cut_defaults = _required_table(DEFAULT_CONFIG, "cuts")
+_particle_defaults = _required_table(DEFAULT_CONFIG, "particle")
 
-BASE_REC_SELECTIONS = "fTPCnCls >= 110 && nITScls >= 5 && std::abs(fEta) < 0.9 && std::abs(fDCAxy) < 0.7 && pt > 0.8 && pt < 9.0"
-DEFAULT_REC_SELECTIONS = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) < 7 && std::abs(fDCAxy) < 0.2"
-HE4_BASE_SELECTION = "fTPCnCls >= 110 && nITScls >= 5 && abs(fEta) < 0.9 && std::abs(fDCAxy) < 0.7 && ptHe4 > 0.5 && ptHe4 < 9.0"
-HE4_PRIMARY_SELECTION = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) < 7 && std::abs(fDCAxy) < 0.2"
-SECONDARY_SELECTION = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) > 7 && std::abs(fDCAxy) < 0.2"
-HE3_TRIAL_DCA_SELECTION = "std::abs(fDCAxy) < 0.2"
-HE3_NSIGMA_TOF_CUT = 3.5
-HE4_NSIGMA_TOF_CUT = 3.0
-SKIM_SELECTION_TEMPLATE = "std::abs(nsigmaDCAz) < 8 && std::abs(fDCAxy) < 0.2 && std::abs({nsigma}) < 5"
-HE3_MC_RECO_APPEND = "&& isPrimary"
-HE3_MC_GEN_SELECTION = "isPrimary && std::abs(yMC) < 0.5"
-HE4_MC_PID_SELECTION = "isHe4 && isPrimary"
-HE4_MC_RECO_SELECTION = "nITScls > 4 && fTPCnCls > 110 && std::abs(fEta) < 0.9 && std::abs(rapidity) < 0.5"
-HE4_MC_GEN_SELECTION = "std::abs(yMC) < 0.5"
-HE4_MC_SIGNAL_TRACKING = "fTPCnCls > 120 && nITScls >= 6 && std::abs(fDCAz) < 0.7"
+MC_PRODUCTION = str(_required_value(_common_defaults, "mc_production", "common"))
+RECO_PASS = str(_required_value(_common_defaults, "reco_pass", "common"))
+PERIOD = str(_required_value(_common_defaults, "period", "common"))
+VARIANT = str(_required_value(_common_defaults, "variant", "common"))
+BASE_INPUT_DIR = str(_required_value(_common_defaults, "base_input_dir", "common"))
+BASE_OUTPUT_ROOT = str(_required_value(_common_defaults, "base_output_root", "common"))
+FILTER_LIST_NAME = str(_required_value(_common_defaults, "filter_list_name", "common"))
+DATA_TREE_BASENAME = str(_required_value(_common_defaults, "data_tree_basename", "common"))
+DATA_ANALYSIS_RESULTS_BASENAME = str(_required_value(_common_defaults, "data_analysis_results_basename", "common"))
+MC_TREE_BASENAME = str(_required_value(_common_defaults, "mc_tree_basename", "common"))
+MC_ANALYSIS_RESULTS_BASENAME = str(_required_value(_common_defaults, "mc_analysis_results_basename", "common"))
 
-N_PT_BINS = 12
-PT_BINS = [1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0]
+BASE_REC_SELECTIONS = str(_required_value(_sel_he3_defaults, "base_rec", "selections.he3"))
+DEFAULT_REC_SELECTIONS = str(_required_value(_sel_he3_defaults, "default_rec", "selections.he3"))
+HE4_BASE_SELECTION = str(_required_value(_sel_he4_defaults, "base_rec", "selections.he4"))
+HE4_PRIMARY_SELECTION = str(_required_value(_sel_he4_defaults, "primary_rec", "selections.he4"))
+SECONDARY_SELECTION = str(_required_value(_sel_he3_defaults, "secondary_rec", "selections.he3"))
+HE3_TRIAL_DCA_SELECTION = str(_required_value(_sel_he3_defaults, "trial_dca", "selections.he3"))
+HE3_NSIGMA_TOF_CUT = float(_required_value(_sel_he3_defaults, "nsigma_tof", "selections.he3"))
+HE4_NSIGMA_TOF_CUT = float(_required_value(_sel_he4_defaults, "nsigma_tof", "selections.he4"))
+SKIM_SELECTION_TEMPLATE = str(_required_value(_sel_common_defaults, "skim_template", "selections.common"))
+HE3_MC_RECO_APPEND = str(_required_value(_sel_he3_defaults, "mc_reco_append", "selections.he3"))
+HE3_MC_GEN_SELECTION = str(_required_value(_sel_he3_defaults, "mc_gen", "selections.he3"))
+HE4_MC_PID_SELECTION = str(_required_value(_sel_he4_defaults, "mc_pid", "selections.he4"))
+HE4_MC_RECO_SELECTION = str(_required_value(_sel_he4_defaults, "mc_reco", "selections.he4"))
+HE4_MC_GEN_SELECTION = str(_required_value(_sel_he4_defaults, "mc_gen", "selections.he4"))
+HE4_MC_SIGNAL_TRACKING = str(_required_value(_sel_he4_defaults, "mc_signal_tracking", "selections.he4"))
+
+PT_BINS = [float(v) for v in _required_value(_common_defaults, "pt_bins", "common")]
+if len(PT_BINS) < 2:
+    raise ValueError(f"common.pt_bins in {DEFAULTS_TOML} must contain at least 2 edges.")
+N_PT_BINS = len(PT_BINS) - 1
 PT_BIN_ARRAY = array("d", PT_BINS)
 CENT_LENGTH = 1
-CENT_PT_LIMITS = [7.0]
-TPC_MAX_PT = 7.0
-TOF_MIN_PT = 1.0
-PT_RANGE = [1.4, 7.0]
-TPC_FUNCTION_NAMES = ["GausGaus", "ExpGaus", "ExpTailGaus", "LognormalLognormal"]
+CENT_PT_LIMITS = [float(v) for v in _required_value(_common_defaults, "cent_pt_limits", "common")]
+if len(CENT_PT_LIMITS) != CENT_LENGTH:
+    raise ValueError(f"common.cent_pt_limits in {DEFAULTS_TOML} must have length {CENT_LENGTH}.")
+TPC_MAX_PT = float(_required_value(_common_defaults, "tpc_max_pt", "common"))
+TOF_MIN_PT = float(_required_value(_common_defaults, "tof_min_pt", "common"))
+PT_RANGE = [float(v) for v in _required_value(_common_defaults, "pt_range", "common")]
+TPC_FUNCTION_NAMES = [str(v) for v in _required_value(_common_defaults, "tpc_function_names", "common")]
+if not TPC_FUNCTION_NAMES:
+    raise ValueError(f"common.tpc_function_names in {DEFAULTS_TOML} must not be empty.")
 # Weighted efficiency histograms are intentionally named "Weff*".
 WEIGHTED_EFF_NAMING_POLICY = "prefix_W"
 
 CUT_NAMES = {
-    "nsigmaDCAz": [6.0, 7.0, 8.0],
-    "fTPCnCls": [110.0, 120.0, 130.0],
-    "nITScls": [5.0, 6.0, 7.0],
-    "nsigmaTPC": [3.0, 4.0, 5.0],
+    "nsigmaDCAz": [float(v) for v in _required_value(_cut_defaults, "nsigmaDCAz", "cuts")],
+    "fTPCnCls": [float(v) for v in _required_value(_cut_defaults, "fTPCnCls", "cuts")],
+    "nITScls": [float(v) for v in _required_value(_cut_defaults, "nITScls", "cuts")],
+    "nsigmaTPC": [float(v) for v in _required_value(_cut_defaults, "nsigmaTPC", "cuts")],
 }
 
 BASE_OUTPUT_DIR = ""
@@ -68,81 +120,43 @@ SIGNAL_OUTPUT = ""
 SYSTEMATICS_OUTPUT = ""
 
 DEFAULT_PARTICLE_CONFIGS = {
-    "he3": {
-        "name": "he3",
-        "anti_name": "antihe3",
-        "label_matter": "^{3}He",
-        "label_antimatter": "^{3}#bar{He}",
-        "mass": 2.80839,
-        "mc_mass": 2.809230089,
-        "pdg_abs": 1000020030,
-        "nsigma_col": "nsigmaHe3",
-        "mass_cut_col": "hasGoodTOFmassHe3",
-        "pt_col": "pt",
-        "dmass_col": "deltaMassHe3",
-        "tof_mass_range_min": -1.0,
-        "tof_mass_range_max": 1.0,
-        "tpc_apply_mass_cut": True,
-        "tpc_pt_col_anti": "pt",
-        "tpc_pt_col_matter": "pt",
-        "tpc_anti_nbins": 0,
-        "tpc_anti_xmin": 0.0,
-        "tpc_anti_xmax": 0.0,
-        "trial_enabled": True,
-        "mc_hist_suffix": "He3",
-        "mc_pt_corr_col": "pt",
-        "mc_delta_x_col": "pt",
-    },
-    "he4": {
-        "name": "he4",
-        "anti_name": "antihe4",
-        "label_matter": "^{4}He",
-        "label_antimatter": "^{4}#bar{He}",
-        "mass": 3.72738,
-        "mc_mass": 3.72738,
-        "pdg_abs": 1000020040,
-        "nsigma_col": "nsigmaHe4",
-        "mass_cut_col": "hasGoodTOFmassHe4",
-        "pt_col": "ptHe4",
-        "dmass_col": "deltaMassHe4",
-        "tof_mass_range_min": -0.6,
-        "tof_mass_range_max": 0.6,
-        "tpc_apply_mass_cut": False,
-        "tpc_pt_col_anti": "ptUncorr",
-        "tpc_pt_col_matter": "ptHe4",
-        "tpc_anti_nbins": 160,
-        "tpc_anti_xmin": 0.5,
-        "tpc_anti_xmax": 4.5,
-        "trial_enabled": False,
-        "mc_hist_suffix": "He4",
-        "mc_pt_corr_col": "ptHe4",
-        "mc_delta_x_col": "ptUncorr",
-    },
+    str(k): copy.deepcopy(v)
+    for k, v in (_particle_defaults.items() if isinstance(_particle_defaults, dict) else [])
+    if isinstance(v, dict)
 }
+if "he3" not in DEFAULT_PARTICLE_CONFIGS or "he4" not in DEFAULT_PARTICLE_CONFIGS:
+    raise ValueError(
+        f"defaults.toml must define [particle.he3] and [particle.he4]. Found: {', '.join(sorted(DEFAULT_PARTICLE_CONFIGS))}."
+    )
+
 PARTICLE_CONFIGS = copy.deepcopy(DEFAULT_PARTICLE_CONFIGS)
 
 
 def _refresh_particle_configs() -> None:
     global PARTICLE_CONFIGS
     PARTICLE_CONFIGS = copy.deepcopy(DEFAULT_PARTICLE_CONFIGS)
-    PARTICLE_CONFIGS["he3"]["tof_nsigma_cut"] = HE3_NSIGMA_TOF_CUT
-    PARTICLE_CONFIGS["he4"]["tof_nsigma_cut"] = HE4_NSIGMA_TOF_CUT
-    PARTICLE_CONFIGS["he3"]["trial_dca_sel"] = HE3_TRIAL_DCA_SELECTION
-    PARTICLE_CONFIGS["he4"]["trial_dca_sel"] = ""
-    PARTICLE_CONFIGS["he3"]["base_sel"] = BASE_REC_SELECTIONS
-    PARTICLE_CONFIGS["he3"]["primary_sel"] = DEFAULT_REC_SELECTIONS
-    PARTICLE_CONFIGS["he4"]["base_sel"] = HE4_BASE_SELECTION
-    PARTICLE_CONFIGS["he4"]["primary_sel"] = HE4_PRIMARY_SELECTION
-    PARTICLE_CONFIGS["he3"]["secondary_sel"] = SECONDARY_SELECTION
-    PARTICLE_CONFIGS["he4"]["secondary_sel"] = SECONDARY_SELECTION
-    PARTICLE_CONFIGS["he3"]["mc_reco_base_sel"] = BASE_REC_SELECTIONS + HE3_MC_RECO_APPEND
-    PARTICLE_CONFIGS["he3"]["mc_reco_sel"] = DEFAULT_REC_SELECTIONS
-    PARTICLE_CONFIGS["he3"]["mc_gen_sel"] = HE3_MC_GEN_SELECTION
-    PARTICLE_CONFIGS["he3"]["mc_signal_tracking"] = ""
-    PARTICLE_CONFIGS["he4"]["mc_reco_base_sel"] = ""
-    PARTICLE_CONFIGS["he4"]["mc_reco_sel"] = HE4_MC_RECO_SELECTION
-    PARTICLE_CONFIGS["he4"]["mc_gen_sel"] = HE4_MC_GEN_SELECTION
-    PARTICLE_CONFIGS["he4"]["mc_signal_tracking"] = HE4_MC_SIGNAL_TRACKING
+
+    if "he3" in PARTICLE_CONFIGS:
+        PARTICLE_CONFIGS["he3"]["tof_nsigma_cut"] = HE3_NSIGMA_TOF_CUT
+        PARTICLE_CONFIGS["he3"]["trial_dca_sel"] = HE3_TRIAL_DCA_SELECTION
+        PARTICLE_CONFIGS["he3"]["base_sel"] = BASE_REC_SELECTIONS
+        PARTICLE_CONFIGS["he3"]["primary_sel"] = DEFAULT_REC_SELECTIONS
+        PARTICLE_CONFIGS["he3"]["secondary_sel"] = SECONDARY_SELECTION
+        PARTICLE_CONFIGS["he3"]["mc_reco_base_sel"] = BASE_REC_SELECTIONS + HE3_MC_RECO_APPEND
+        PARTICLE_CONFIGS["he3"]["mc_reco_sel"] = DEFAULT_REC_SELECTIONS
+        PARTICLE_CONFIGS["he3"]["mc_gen_sel"] = HE3_MC_GEN_SELECTION
+        PARTICLE_CONFIGS["he3"]["mc_signal_tracking"] = ""
+
+    if "he4" in PARTICLE_CONFIGS:
+        PARTICLE_CONFIGS["he4"]["tof_nsigma_cut"] = HE4_NSIGMA_TOF_CUT
+        PARTICLE_CONFIGS["he4"]["trial_dca_sel"] = ""
+        PARTICLE_CONFIGS["he4"]["base_sel"] = HE4_BASE_SELECTION
+        PARTICLE_CONFIGS["he4"]["primary_sel"] = HE4_PRIMARY_SELECTION
+        PARTICLE_CONFIGS["he4"]["secondary_sel"] = SECONDARY_SELECTION
+        PARTICLE_CONFIGS["he4"]["mc_reco_base_sel"] = ""
+        PARTICLE_CONFIGS["he4"]["mc_reco_sel"] = HE4_MC_RECO_SELECTION
+        PARTICLE_CONFIGS["he4"]["mc_gen_sel"] = HE4_MC_GEN_SELECTION
+        PARTICLE_CONFIGS["he4"]["mc_signal_tracking"] = HE4_MC_SIGNAL_TRACKING
 
 
 def recompute_derived_globals() -> None:
@@ -244,13 +258,49 @@ def apply_runtime_overrides(cfg: dict[str, Any]) -> None:
 
     particle_cfg = cfg.get("particle", {})
     if isinstance(particle_cfg, dict):
-        for key in ("he3", "he4"):
-            override = particle_cfg.get(key, {})
+        for key, override in particle_cfg.items():
             if not isinstance(override, dict):
                 continue
+            if key not in PARTICLE_CONFIGS:
+                template = str(override.get("template", "he3"))
+                if template not in PARTICLE_CONFIGS:
+                    raise ValueError(
+                        f"Unknown particle template '{template}' for particle '{key}'. "
+                        f"Available templates: {', '.join(sorted(PARTICLE_CONFIGS))}."
+                    )
+                PARTICLE_CONFIGS[key] = copy.deepcopy(PARTICLE_CONFIGS[template])
             for pkey, pval in override.items():
-                if pkey in PARTICLE_CONFIGS[key]:
-                    PARTICLE_CONFIGS[key][pkey] = pval
+                if pkey == "template":
+                    continue
+                PARTICLE_CONFIGS[key][pkey] = pval
+
+    # Apply per-species selections for all configured particles.
+    if isinstance(selections, dict):
+        for species_key, species_cfg in PARTICLE_CONFIGS.items():
+            sel_species = selections.get(species_key, {})
+            if not isinstance(sel_species, dict):
+                continue
+
+            if "base_rec" in sel_species:
+                species_cfg["base_sel"] = str(sel_species["base_rec"])
+            if "primary_rec" in sel_species or "default_rec" in sel_species:
+                species_cfg["primary_sel"] = str(sel_species.get("primary_rec", sel_species.get("default_rec")))
+            if "secondary_rec" in sel_species:
+                species_cfg["secondary_sel"] = str(sel_species["secondary_rec"])
+            if "trial_dca" in sel_species:
+                species_cfg["trial_dca_sel"] = str(sel_species["trial_dca"])
+            if "nsigma_tof" in sel_species:
+                species_cfg["tof_nsigma_cut"] = float(sel_species["nsigma_tof"])
+            if "mc_reco_base" in sel_species:
+                species_cfg["mc_reco_base_sel"] = str(sel_species["mc_reco_base"])
+            elif "mc_reco_append" in sel_species:
+                species_cfg["mc_reco_base_sel"] = f"{species_cfg.get('base_sel', '')}{str(sel_species['mc_reco_append'])}"
+            if "mc_reco" in sel_species:
+                species_cfg["mc_reco_sel"] = str(sel_species["mc_reco"])
+            if "mc_gen" in sel_species:
+                species_cfg["mc_gen_sel"] = str(sel_species["mc_gen"])
+            if "mc_signal_tracking" in sel_species:
+                species_cfg["mc_signal_tracking"] = str(sel_species["mc_signal_tracking"])
 
     recompute_derived_globals()
 
