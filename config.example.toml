@@ -48,7 +48,7 @@ nsigmaTPC = [3.0, 4.0, 5.0]
 
 [run]
 task = "analyse_data"      # analyse_data | analyse_mc | signal | systematics | checkpoint | report | full_chain
-species = ["he3", "he4"]   # choose one or many among: he3, he4
+species = "he3"            # single-particle mode: he3 or he4
 enable_mt = true
 nthreads = 0                # 0 -> ROOT default
 enable_trials = true
@@ -68,7 +68,17 @@ tpc_signal_model = "ExpGaus"
 
 [paths]
 # Optional overrides only.
-# All standard input/output locations are derived from [common] and species name.
+# All standard input/output locations are derived from [common].
+data_tree = "$NUCLEI_INPUT/data/LHC24/apass1/AO2D_skimmed.root"
+data_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/DataHistos.root"
+data_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/DataHistos.root"
+mc_tree = "$NUCLEI_INPUT/MC/LHC25b9/AO2D_coalescence.root"
+mc_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/MChistos.root"
+mc_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/MChistos.root"
+signal_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/signal.root"
+signal_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/signal.root"
+systematics_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/systematics.root"
+systematics_input = "$NUCLEI_OUTPUT/LHC24/apass1/default/systematics.root"
 log_file = ""
 metadata_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/run_metadata.json"
 report_dir = "$NUCLEI_OUTPUT/LHC24/apass1/default/report"

@@ -469,32 +469,34 @@ def generate_report(
         for bidx, p in _tof_tpc_2d_paths(data_file, species):
             items.append(ReportItem("tof_tpc_2d", f"m_TOF vs nσ_TPC Bin {bidx}", resolved["data"], p, f"assets/tof_mass_vs_tpc_nsigma_bin_{bidx:02d}.png", bin_index=bidx))
 
-    raw_name = "hRawCountsA0" if species == "antihe3" else "hRawCountsM0"
+    letter = _species_letter(species)
+    raw_name = f"hRawCounts{letter}0"
     items.append(
         ReportItem(
             "efficiency",
             "TPC/TOF Efficiency Overlay",
             mc_file_path,
-            "nuclei/effTPCA" if species == "antihe3" else "nuclei/effTPCM",
+            f"nuclei/effTPC{letter}",
             "assets/eff_tpc_tof_overlay.png",
             note="Uncertainty: binomial (both)",
-            overlay_path="nuclei/effTOFA" if species == "antihe3" else "nuclei/effTOFM",
+            overlay_path=f"nuclei/effTOF{letter}",
         )
     )
-    items.append(ReportItem("pt_resolution", "pT(rec)-pT(sim) Uncorrected", mc_file_path, "nuclei/hDeltaPtHe3", "assets/delta_pt_uncorrected.png"))
-    items.append(ReportItem("pt_resolution", "pT(rec)-pT(sim) Corrected", mc_file_path, "nuclei/hDeltaPtCorrHe3", "assets/delta_pt_corrected.png"))
-    items.append(ReportItem("corrected_spectrum", "Normalized Corrected Spectrum TPC", systematics_file_path, "fStatTPCA" if species == "antihe3" else "fStatTPCM", "assets/corrected_tpc_norm.png", overlay_path="fSystTPCA" if species == "antihe3" else "fSystTPCM"))
-    items.append(ReportItem("corrected_spectrum", "Normalized Corrected Spectrum TOF", systematics_file_path, "fStatTOFA" if species == "antihe3" else "fStatTOFM", "assets/corrected_tof_norm.png", overlay_path="fSystTOFA" if species == "antihe3" else "fSystTOFM"))
+    mc_suffix = "He4" if "he4" in species.lower() else "He3"
+    items.append(ReportItem("pt_resolution", "pT(rec)-pT(sim) Uncorrected", mc_file_path, f"nuclei/hDeltaPt{mc_suffix}", "assets/delta_pt_uncorrected.png"))
+    items.append(ReportItem("pt_resolution", "pT(rec)-pT(sim) Corrected", mc_file_path, f"nuclei/hDeltaPtCorr{mc_suffix}", "assets/delta_pt_corrected.png"))
+    items.append(ReportItem("corrected_spectrum", "Normalized Corrected Spectrum TPC", systematics_file_path, f"fStatTPC{letter}", "assets/corrected_tpc_norm.png", overlay_path=f"fSystTPC{letter}"))
+    items.append(ReportItem("corrected_spectrum", "Normalized Corrected Spectrum TOF", systematics_file_path, f"fStatTOF{letter}", "assets/corrected_tof_norm.png", overlay_path=f"fSystTOF{letter}"))
 
     file_map = {signal_file_path: sig_file, mc_file_path: mc_file, systematics_file_path: syst_file}
     if data_file:
         file_map[resolved["data"]] = data_file
 
     corrected_stats = [
-        _get(syst_file, "fStatTPCA" if species == "antihe3" else "fStatTPCM"),
-        _get(syst_file, "fSystTPCA" if species == "antihe3" else "fSystTPCM"),
-        _get(syst_file, "fStatTOFA" if species == "antihe3" else "fStatTOFM"),
-        _get(syst_file, "fSystTOFA" if species == "antihe3" else "fSystTOFM"),
+        _get(syst_file, f"fStatTPC{letter}"),
+        _get(syst_file, f"fSystTPC{letter}"),
+        _get(syst_file, f"fStatTOF{letter}"),
+        _get(syst_file, f"fSystTOF{letter}"),
     ]
     corr_max = max(_hist_visible_max(h) for h in corrected_stats)
     corr_pos = [v for v in (_hist_positive_min(h) for h in corrected_stats) if v is not None]
@@ -534,11 +536,10 @@ def generate_report(
         rows.append(RenderedItem(it, ok, status, status_class, note=it.note, metrics=metrics))
 
     row_by_section = {sec: [r for r in rows if r.item.section == sec] for sec in SECTION_DEFS}
-    letter = _species_letter(species)
     tof_yield = _get(sig_file, f"nuclei/{species}/GausExp/{raw_name}")
     tpc_yield = _get(sig_file, f"nuclei/{species}/TPConly/hTPConly{letter}0_{tpc_signal_model}")
-    tpc_eff = _get(mc_file, "nuclei/effTPCA" if species == "antihe3" else "nuclei/effTPCM")
-    tof_eff = _get(mc_file, "nuclei/effTOFA" if species == "antihe3" else "nuclei/effTOFM")
+    tpc_eff = _get(mc_file, f"nuclei/effTPC{letter}")
+    tof_eff = _get(mc_file, f"nuclei/effTOF{letter}")
 
     meta = {}
     if metadata_path and os.path.exists(expand(metadata_path)):

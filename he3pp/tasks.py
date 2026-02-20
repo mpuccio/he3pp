@@ -58,29 +58,76 @@ def _find_object_by_class(root_dir: Any, class_name: str) -> Any | None:
     return None
 
 
+def _particle_profile(particle: str) -> dict[str, Any]:
+    profiles = {
+        "he3": {
+            "name": "he3",
+            "anti_name": "antihe3",
+            "isotope": "3",
+            "mass": 2.80839,
+            "nsigma_col": "nsigmaHe3",
+            "mass_cut_col": "hasGoodTOFmassHe3",
+            "pt_col": "pt",
+            "dmass_col": "deltaMassHe3",
+            "base_sel": BASE_REC_SELECTIONS,
+            "primary_sel": DEFAULT_REC_SELECTIONS,
+            "secondary_sel": SECONDARY_SELECTION,
+            "tof_nsigma_cut": HE3_NSIGMA_TOF_CUT,
+            "tof_mass_range": (-1.0, 1.0),
+            "tpc_apply_mass_cut": True,
+            "tpc_pt_col_anti": "pt",
+            "tpc_pt_col_matter": "pt",
+            "tpc_anti_binning": ("ptbins",),
+            "tpc_matter_binning": ("ptbins",),
+            "trial_enabled": True,
+            "trial_dca_sel": HE3_TRIAL_DCA_SELECTION,
+        },
+        "he4": {
+            "name": "he4",
+            "anti_name": "antihe4",
+            "isotope": "4",
+            "mass": 3.72738,
+            "nsigma_col": "nsigmaHe4",
+            "mass_cut_col": "hasGoodTOFmassHe4",
+            "pt_col": "ptHe4",
+            "dmass_col": "deltaMassHe4",
+            "base_sel": HE4_BASE_SELECTION,
+            "primary_sel": HE4_PRIMARY_SELECTION,
+            "secondary_sel": SECONDARY_SELECTION,
+            "tof_nsigma_cut": HE4_NSIGMA_TOF_CUT,
+            "tof_mass_range": (-0.6, 0.6),
+            "tpc_apply_mass_cut": False,
+            "tpc_pt_col_anti": "ptUncorr",
+            "tpc_pt_col_matter": "ptHe4",
+            "tpc_anti_binning": ("fixed", 160, 0.5, 4.5),
+            "tpc_matter_binning": ("ptbins",),
+            "trial_enabled": False,
+            "trial_dca_sel": "",
+        },
+    }
+    if particle not in profiles:
+        raise ValueError(f"Unsupported particle '{particle}'. Allowed: {', '.join(sorted(profiles))}.")
+    return profiles[particle]
+
+
 def _book_data_species(df_all: Any, particle: str, skim: bool = False, tag: str = "") -> dict[str, Any]:
-    if particle == "he4":
-        df_base = df_all.Filter(HE4_BASE_SELECTION)
-        df_primary = df_base.Filter(HE4_PRIMARY_SELECTION)
-        df_secondary = df_base.Filter(SECONDARY_SELECTION)
-        nsigma = "nsigmaHe4"
-        mass_cut = "hasGoodTOFmassHe4"
-        pt_name = "ptHe4"
-        dmass = "deltaMassHe4"
-        nominal_mass = 3.72738
-        tpc_anti_model = ROOT.RDF.TH2DModel(f"fATPCcounts{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});^{4}#bar{He} n#sigma_{TPC};Counts", 160, 0.5, 4.5, 100, -5, 5)
-        tpc_mat_model = ROOT.RDF.TH2DModel(f"fMTPCcounts{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});^{4}He n#sigma_{TPC};Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -5, 5)
+    p = _particle_profile(particle)
+    df_base = df_all.Filter(p["base_sel"])
+    df_primary = df_base.Filter(p["primary_sel"])
+    df_secondary = df_base.Filter(p["secondary_sel"])
+    nsigma = p["nsigma_col"]
+    mass_cut = p["mass_cut_col"]
+    pt_name = p["pt_col"]
+    dmass = p["dmass_col"]
+    nominal_mass = p["mass"]
+    anti_label = f"^{{{p['isotope']}}}#bar{{He}}"
+    matter_label = f"^{{{p['isotope']}}}He"
+    if p["tpc_anti_binning"][0] == "fixed":
+        _, nbins_x, xmin, xmax = p["tpc_anti_binning"]
+        tpc_anti_model = ROOT.RDF.TH2DModel(f"fATPCcounts{tag}", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});{anti_label} n#sigma_{{TPC}};Counts", nbins_x, xmin, xmax, 100, -5, 5)
     else:
-        df_base = df_all.Filter(BASE_REC_SELECTIONS)
-        df_primary = df_base.Filter(DEFAULT_REC_SELECTIONS)
-        df_secondary = df_base.Filter(SECONDARY_SELECTION)
-        nsigma = "nsigmaHe3"
-        mass_cut = "hasGoodTOFmassHe3"
-        pt_name = "pt"
-        dmass = "deltaMassHe3"
-        nominal_mass = 2.80839
-        tpc_anti_model = ROOT.RDF.TH2DModel(f"fATPCcounts{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});^{3}#bar{He} n#sigma_{TPC};Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -5, 5)
-        tpc_mat_model = ROOT.RDF.TH2DModel(f"fMTPCcounts{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});^{3}He n#sigma_{TPC};Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -5, 5)
+        tpc_anti_model = ROOT.RDF.TH2DModel(f"fATPCcounts{tag}", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});{anti_label} n#sigma_{{TPC}};Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -5, 5)
+    tpc_mat_model = ROOT.RDF.TH2DModel(f"fMTPCcounts{tag}", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});{matter_label} n#sigma_{{TPC}};Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -5, 5)
 
     if skim:
         df_base.Filter(SKIM_SELECTION_TEMPLATE.format(nsigma=nsigma)).Snapshot("nucleiTree", "data/skimmed.root")
@@ -97,19 +144,18 @@ def _book_data_species(df_all: Any, particle: str, skim: bool = False, tag: str 
         h_dca_z[label] = [df_primary.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(ROOT.RDF.TH2DModel(f"hDCAz{label}He{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{z} (cm);Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -0.2, 0.2), pt_name, "fDCAz")]
         h_dca_xy_secondary[label] = [df_secondary.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(ROOT.RDF.TH2DModel(f"hDCAxySecondary{label}He{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -0.2, 0.2), pt_name, "fDCAxy")]
 
-        tpc_sel = f"{matter_sel} && {mass_cut}" if particle == "he3" else matter_sel
+        tpc_sel = f"{matter_sel} && {mass_cut}" if p["tpc_apply_mass_cut"] else matter_sel
         tpc_model = tpc_anti_model if label == "A" else tpc_mat_model
-        tpc_pt_name = "ptUncorr" if (particle == "he4" and label == "A") else pt_name
+        tpc_pt_name = p["tpc_pt_col_anti"] if label == "A" else p["tpc_pt_col_matter"]
         h_tpc[label] = [df_primary.Filter(tpc_sel).Histo2D(tpc_model, tpc_pt_name, nsigma)]
 
-    nsigma_tof_cut = HE4_NSIGMA_TOF_CUT if particle == "he4" else HE3_NSIGMA_TOF_CUT
+    nsigma_tof_cut = p["tof_nsigma_cut"]
     for label, matter_sel in matter_map.items():
-        isotope = "4" if particle == "he4" else "3"
-        species_label = f"^{{{isotope}}}#bar{{He}}" if label == "A" else f"^{{{isotope}}}He"
+        species_label = anti_label if label == "A" else matter_label
         h_tof[label] = [df_primary.Filter(f"{matter_sel} && std::abs({nsigma}) < {nsigma_tof_cut}").Histo2D(ROOT.RDF.TH2DModel(f"f{label}TOFsignal{tag}", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});m_{{TOF}}-m_{{{species_label}}};Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -0.9, 1.1), pt_name, dmass)]
 
     df_primary = df_primary.Define(f"tofMassDeltaPOI{tag}", f"tofMass - {nominal_mass}")
-    tof_delta_mass_range = (-0.6, 0.6) if particle == "he4" else (-1.0, 1.0)
+    tof_delta_mass_range = p["tof_mass_range"]
     h_tof_mass_vs_tpc_nsigma: dict[str, list[Any]] = {"A": [], "M": []}
     for i_pt in range(N_PT_BINS):
         pt_low = PT_BINS[i_pt]
@@ -133,7 +179,7 @@ def _book_data_species(df_all: Any, particle: str, skim: bool = False, tag: str 
             )
 
     i_trial = 0
-    if particle == "he3":
+    if p["trial_enabled"]:
         for cut_dca_z in CUT_NAMES["nsigmaDCAz"]:
             df_dca_z = df_base.Filter(f"std::abs(nsigmaDCAz) < {cut_dca_z}")
             for cut_tpc in CUT_NAMES["fTPCnCls"]:
@@ -141,11 +187,11 @@ def _book_data_species(df_all: Any, particle: str, skim: bool = False, tag: str 
                 for cut_its in CUT_NAMES["nITScls"]:
                     df_its = df_tpc.Filter(f"nITScls >= {cut_its}")
                     for label, matter_sel in matter_map.items():
-                        species_label = "^{3}#bar{He}" if label == "A" else "^{3}He"
-                        h_dca_xy[label].append(df_its.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(ROOT.RDF.TH2DModel(f"hDCAxy{label}He3{i_trial}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", N_PT_BINS, PT_BIN_ARRAY, 560, -0.7, 0.7), pt_name, "fDCAxy"))
-                        h_dca_z[label].append(df_its.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(ROOT.RDF.TH2DModel(f"hDCAz{label}He3{i_trial}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{z} (cm);Counts", N_PT_BINS, PT_BIN_ARRAY, 560, -0.7, 0.7), pt_name, "fDCAz"))
-                        h_tpc[label].append(df_its.Filter(f"{matter_sel} && {HE3_TRIAL_DCA_SELECTION} && {mass_cut}").Histo2D(ROOT.RDF.TH2DModel(f"f{label}TPCcounts{i_trial}{tag}", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});{species_label} n#sigma_{{TPC}};Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -5, 5), pt_name, nsigma))
-                        h_tof[label].append(df_its.Filter(f"{matter_sel} && {HE3_TRIAL_DCA_SELECTION} && std::abs({nsigma}) < {HE3_NSIGMA_TOF_CUT}").Histo2D(ROOT.RDF.TH2DModel(f"f{label}TOFsignal{i_trial}{tag}", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});m_{{TOF}}-m_{{{species_label}}};Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -0.9, 1.1), pt_name, dmass))
+                        species_label = anti_label if label == "A" else matter_label
+                        h_dca_xy[label].append(df_its.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(ROOT.RDF.TH2DModel(f"hDCAxy{label}He{i_trial}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{xy} (cm);Counts", N_PT_BINS, PT_BIN_ARRAY, 560, -0.7, 0.7), pt_name, "fDCAxy"))
+                        h_dca_z[label].append(df_its.Filter(f"{matter_sel} && {nsigma} > -0.5 && {nsigma} < 3 && {mass_cut}").Histo2D(ROOT.RDF.TH2DModel(f"hDCAz{label}He{i_trial}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});DCA_{z} (cm);Counts", N_PT_BINS, PT_BIN_ARRAY, 560, -0.7, 0.7), pt_name, "fDCAz"))
+                        h_tpc[label].append(df_its.Filter(f"{matter_sel} && {p['trial_dca_sel']} && {mass_cut}").Histo2D(ROOT.RDF.TH2DModel(f"f{label}TPCcounts{i_trial}{tag}", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});{species_label} n#sigma_{{TPC}};Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -5, 5), pt_name, nsigma))
+                        h_tof[label].append(df_its.Filter(f"{matter_sel} && {p['trial_dca_sel']} && std::abs({nsigma}) < {nsigma_tof_cut}").Histo2D(ROOT.RDF.TH2DModel(f"f{label}TOFsignal{i_trial}{tag}", f";#it{{p}}_{{T}}^{{rec}} (GeV/#it{{c}});m_{{TOF}}-m_{{{species_label}}};Counts", N_PT_BINS, PT_BIN_ARRAY, 100, -0.9, 1.1), pt_name, dmass))
                     i_trial += 1
 
     return {
@@ -218,46 +264,6 @@ def analyse_data(input_file: str, output_file: str, particle: str, skim: bool = 
                 hist.DrawClone("colz")
     _write_data_bundle(bundle, output_file)
     LOGGER.info("analyse_data done output=%s", output_file)
-
-
-def analyse_data_multi(input_file: str, outputs: dict[str, str], skim: bool = False, draw: bool = False) -> None:
-    particles = [p for p in ("he3", "he4") if p in outputs]
-    if not particles:
-        raise ValueError("analyse_data_multi requires at least one output among {'he3','he4'}.")
-    LOGGER.info("analyse_data_multi start input=%s particles=%s", input_file, particles)
-    ROOT.gStyle.SetOptStat(0)
-    rdf = build_rdf_from_ao2d("O2nucleitable", input_file)
-    df_all = define_columns_for_data(rdf)
-
-    bundles: dict[str, dict[str, Any]] = {}
-    all_actions: list[Any] = []
-    for particle in particles:
-        bundle = _book_data_species(df_all, particle, skim=(skim and particle == "he3"), tag=f"_{particle}")
-        bundles[particle] = bundle
-        all_actions += (
-            _collect_rresult_ptrs(bundle["h_tpc"])
-            + _collect_rresult_ptrs(bundle["h_tof"])
-            + _collect_rresult_ptrs(bundle["h_dca_xy"])
-            + _collect_rresult_ptrs(bundle["h_dca_z"])
-            + _collect_rresult_ptrs(bundle["h_dca_xy_secondary"])
-            + _collect_rresult_ptrs(bundle["h_tof_mass_vs_tpc_nsigma"])
-        )
-    _run_graphs(all_actions)
-
-    if draw:
-        for particle in particles:
-            bundle = bundles[particle]
-            for hist_map, labels in (
-                (bundle["h_tpc"], ("A", "M")),
-                (bundle["h_tof"], ("A", "M")),
-            ):
-                for label in labels:
-                    c = ROOT.TCanvas()
-                    c.SetRightMargin(0.15)
-                    hist_map[label][0].DrawClone("colz")
-    for particle in particles:
-        _write_data_bundle(bundles[particle], outputs[particle])
-    LOGGER.info("analyse_data_multi done outputs=%s", {k: outputs[k] for k in particles})
 
 
 def _book_mc_species(df_data: Any, particle: str, enable_trials: bool, tag: str = "") -> dict[str, Any]:
@@ -472,31 +478,6 @@ def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: 
         _draw_mc_eff(bundle, f"effMatterAntiMatter_{particle}")
     _write_mc_bundle(bundle, output_file)
     LOGGER.info("analyse_mc done output=%s", output_file)
-
-
-def analyse_mc_multi(input_file: str, outputs: dict[str, str], enable_trials: bool, draw: bool = False) -> None:
-    particles = [p for p in ("he3", "he4") if p in outputs]
-    if not particles:
-        raise ValueError("analyse_mc_multi requires at least one output among {'he3','he4'}.")
-    LOGGER.info("analyse_mc_multi start input=%s particles=%s", input_file, particles)
-    ROOT.gStyle.SetOptStat(0)
-    rdf = build_rdf_from_ao2d("O2nucleitablemc", input_file)
-    df_data = define_columns_for_data(rdf)
-
-    bundles: dict[str, dict[str, Any]] = {}
-    all_actions: list[Any] = []
-    for particle in particles:
-        bundle = _book_mc_species(df_data, particle, enable_trials, tag=f"_{particle}")
-        bundles[particle] = bundle
-        all_actions += bundle["actions"]
-    _run_graphs(all_actions)
-
-    if draw:
-        for particle in particles:
-            _draw_mc_eff(bundles[particle], f"effMatterAntiMatter_{particle}")
-    for particle in particles:
-        _write_mc_bundle(bundles[particle], outputs[particle])
-    LOGGER.info("analyse_mc_multi done outputs=%s", {k: outputs[k] for k in particles})
 
 
 def signal(input_file: str, output_file: str) -> None:

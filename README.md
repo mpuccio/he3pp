@@ -58,8 +58,8 @@ python3 he3_cli.py --config config.example.toml --dump-default-config
   - Input paths are derived from `period`/`reco_pass` (data) and `mc_production` (MC) plus optional basename keys:
   `data_tree_basename`, `data_analysis_results_basename`, `mc_tree_basename`, `mc_analysis_results_basename`
 - `[selections.common]`: shared selection snippets (e.g. skim template)
-- `[selections.he3]`: he3-specific selections (required when `he3` is in `run.species`)
-- `[selections.he4]`: he4-specific selections (required when `he4` is in `run.species`)
+- `[selections.he3]`: he3-specific selections (required when `run.species = "he3"`)
+- `[selections.he4]`: he4-specific selections (required when `run.species = "he4"`)
 - `[cuts]`: trial scan grids (`nsigmaDCAz`, `fTPCnCls`, `nITScls`, `nsigmaTPC`)
 - `[run]`: task + runtime flags
 - `[paths]`: optional non-derivable overrides (most IO paths are auto-derived)
@@ -76,18 +76,15 @@ Report controls:
 - `[report].fit_alpha`: Pearson threshold for signal-fit `OK/KO` labels
 - `[report].fit_tail`: `single` (default) or `two` for p-value computation
 - `[report].tpc_signal_model`: TPC-only model used for extraction plots + summary table
-- `[run].species`: processing/report species list (e.g. `["he3"]` or `["he3","he4"]`)
-- `[species.<name>.paths]`: optional species-specific path overrides (not required)
+- `[run].species`: single processing species (`"he3"` or `"he4"`)
 
 Available report sections include:
 `signal_tof`, `signal_tpc`, `tof_tpc_2d`, `efficiency`, `pt_resolution`, `corrected_spectrum`.
 
-When two species are requested:
-- Both selection sections must exist: `[selections.he3]` and `[selections.he4]`
-- Generates per-species subreports in `<report_dir>/he3/` and `<report_dir>/he4/`
-- Generates a top-level index at `<report_dir>/index.html` linking both pages
-- If provided, uses species-specific path overrides from sections like:
-`[species.he3.paths]` and `[species.he4.paths]` (`data_input`, `mc_input`, `signal_input`, `systematics_input`, `metadata_output`)
+Single-particle mode:
+- Select one species with `[run].species`
+- Provide the matching selection section (`[selections.he3]` or `[selections.he4]`)
+- Use task-specific keys under `[paths]` (`data_tree`, `data_output`, `mc_tree`, `mc_output`, etc.)
 
 ## Tasks
 
@@ -103,7 +100,7 @@ Supported tasks:
 
 ## Smoke validation
 
-Dual smoke (LHC24 data + LHC25b9 MC, He3 + He4):
+Smoke (LHC24 data + LHC25b9 MC, He3):
 
 ```bash
 scripts/update_smoke_references.sh   # one-time or when intentionally refreshing references
@@ -111,4 +108,4 @@ scripts/run_smoke_checks.sh
 ```
 
 Reference location used by smoke checks:
-`$NUCLEI_INPUT/smoke_references/python_dual/LHC24_apass1__LHC25b9/`
+`$NUCLEI_INPUT/smoke_references/python_single/LHC24_apass1__LHC25b9/`

@@ -100,7 +100,7 @@ def default_config() -> dict:
         },
         "run": {
             "task": "analyse_data",
-            "species": ["he3"],
+            "species": "he3",
             "enable_mt": True,
             "nthreads": 0,
             "enable_trials": True,
@@ -108,7 +108,6 @@ def default_config() -> dict:
             "draw": False,
             "log_level": "INFO",
         },
-        "species": {},
         "report": {
             "sections": ["signal_tof", "signal_tpc", "tof_tpc_2d", "efficiency", "pt_resolution", "corrected_spectrum"],
             "fit_alpha": 0.05,
@@ -136,73 +135,20 @@ def default_config() -> dict:
     }
 
 
-def _parse_species(run_cfg: dict) -> list[str]:
+def _parse_species(run_cfg: dict) -> str:
     raw = run_cfg.get("species")
     if raw is None:
         raise ValueError("Missing run.species in config.")
     if isinstance(raw, str):
-        values = [raw]
+        value = raw.strip().lower()
     else:
-        values = list(raw)
-    out: list[str] = []
-    for item in values:
-        s_item = str(item).lower()
-        if s_item not in ("he3", "he4"):
-            raise ValueError(f"Unsupported species '{item}'. Allowed: he3, he4.")
-        if s_item not in out:
-            out.append(s_item)
-    if not out:
-        raise ValueError("run.species must contain at least one element.")
-    return out
-
-
-def _anti_species_name(species: str) -> str:
-    return f"anti{species}"
-
-
-def _species_paths(cfg: dict, species: str) -> dict:
-    node = cfg.get("species", {}).get(species, {})
-    if not isinstance(node, dict):
-        return {}
-    paths_node = node.get("paths", node)
-    return paths_node if isinstance(paths_node, dict) else {}
-
-
-def _species_output_defaults(species: str) -> dict[str, str]:
-    base = f"{s.BASE_VARIANT_OUTPUT_DIR}{species}/"
-    return {
-        "data_output": f"{base}DataHistos.root",
-        "data_input": f"{base}DataHistos.root",
-        "mc_output": f"{base}MChistos.root",
-        "mc_input": f"{base}MChistos.root",
-        "signal_output": f"{base}signal.root",
-        "signal_input": f"{base}signal.root",
-        "systematics_output": f"{base}systematics.root",
-        "systematics_input": f"{base}systematics.root",
-        "metadata_output": f"{base}run_metadata.json",
-    }
-
-
-def _resolve_species_path(
-    cfg: dict,
-    path_cfg: dict,
-    species: str,
-    key: str,
-    *,
-    generic_key: str | None = None,
-    default: str | None = None,
-) -> str:
-    sp_paths = _species_paths(cfg, species)
-    if key in sp_paths:
-        return sp_paths[key]
-    if generic_key and generic_key in path_cfg:
-        return path_cfg[generic_key]
-    if default is not None:
-        return default
-    defaults = _species_output_defaults(species)
-    if key in defaults:
-        return defaults[key]
-    raise KeyError(f"Missing path for species={species}: key={key}")
+        values = [str(v).strip().lower() for v in list(raw)]
+        if len(values) != 1:
+            raise ValueError("Single-particle mode: run.species must contain exactly one value.")
+        value = values[0]
+    if value not in ("he3", "he4"):
+        raise ValueError(f"Unsupported run.species '{value}'. Allowed: he3, he4.")
+    return value
 
 
 def run(cfg: dict) -> None:
@@ -213,12 +159,10 @@ def run(cfg: dict) -> None:
     species = _parse_species(run_cfg)
     if str(run_cfg.get("task", "analyse_data")).lower() in {"analyse_data", "analyse_mc", "full_chain"}:
         sel_cfg = cfg.get("selections", {})
-        missing_sel_sections = [sp for sp in species if not isinstance(sel_cfg.get(sp), dict)]
-        if missing_sel_sections:
+        if not isinstance(sel_cfg.get(species), dict):
             raise ValueError(
-                "Missing species selection sections for requested run.species: "
-                + ", ".join(missing_sel_sections)
-                + ". Add [selections.he3] / [selections.he4] as needed."
+                f"Missing selection section for run.species='{species}'. "
+                f"Add [selections.{species}] in config."
             )
     LOGGER.info("Starting run task=%s species=%s", run_cfg.get("task", "analyse_data"), species)
 
@@ -242,32 +186,10 @@ def run(cfg: dict) -> None:
     t0 = time.time()
     if task == "analyse_data":
         input_file = path_cfg.get("data_tree", s.DATA_TREE_FILENAME)
-        selected_outputs = {
-            sp: _resolve_species_path(
-                cfg,
-                path_cfg,
-                sp,
-                "data_output",
-                generic_key="data_output",
-                default=None,
-            )
-            for sp in species
-        }
-        tasks.analyse_data_multi(input_file, selected_outputs, bool(run_cfg.get("skim", False)), draw)
+        tasks.analyse_data(input_file, path_cfg.get("data_output", s.DATA_FILENAME), species, bool(run_cfg.get("skim", False)), draw)
     elif task == "analyse_mc":
         input_file = path_cfg.get("mc_tree", s.MC_TREE_FILENAME)
-        selected_outputs = {
-            sp: _resolve_species_path(
-                cfg,
-                path_cfg,
-                sp,
-                "mc_output",
-                generic_key="mc_output",
-                default=None,
-            )
-            for sp in species
-        }
-        tasks.analyse_mc_multi(input_file, selected_outputs, bool(run_cfg.get("enable_trials", True)), draw)
+        tasks.analyse_mc(input_file, path_cfg.get("mc_output", s.MC_FILENAME), species, bool(run_cfg.get("enable_trials", True)), draw)
     elif task == "signal":
         tasks.signal(path_cfg.get("data_input", s.DATA_FILENAME), path_cfg.get("signal_output", s.SIGNAL_OUTPUT))
     elif task == "systematics":
@@ -287,119 +209,59 @@ def run(cfg: dict) -> None:
             path_cfg.get("checkpoint_output"),
         )
     elif task == "report":
-        from .reporting import generate_dual_report_index, generate_report
+        from .reporting import generate_report
 
-        root_report_dir = path_cfg.get("report_dir", f"{s.BASE_VARIANT_OUTPUT_DIR}report")
-        if len(species) == 1:
-            sp = species[0]
-            report_index = generate_report(
-                report_dir=root_report_dir,
-                signal_file_path=_resolve_species_path(cfg, path_cfg, sp, "signal_input", generic_key="signal_input", default=None),
-                mc_file_path=_resolve_species_path(cfg, path_cfg, sp, "mc_input", generic_key="mc_input", default=None),
-                systematics_file_path=_resolve_species_path(cfg, path_cfg, sp, "systematics_input", generic_key="systematics_input", default=None),
-                metadata_path=_resolve_species_path(cfg, path_cfg, sp, "metadata_output", generic_key="metadata_output", default="run_metadata.json"),
-                species=_anti_species_name(sp),
-                sections=list(report_cfg.get("sections", [])),
-                fit_alpha=float(report_cfg.get("fit_alpha", 0.05)),
-                fit_tail=str(report_cfg.get("fit_tail", "single")),
-                tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
-                data_file_path=_resolve_species_path(cfg, path_cfg, sp, "data_input", generic_key="data_input", default=None),
-            )
-            LOGGER.info("Report generated: %s", report_index)
-        else:
-            entries = []
-            for sp in species:
-                sub_report_dir = f"{root_report_dir}/{sp}"
-                report_index = generate_report(
-                    report_dir=sub_report_dir,
-                    signal_file_path=_resolve_species_path(cfg, path_cfg, sp, "signal_input", generic_key="signal_input", default=None),
-                    mc_file_path=_resolve_species_path(cfg, path_cfg, sp, "mc_input", generic_key="mc_input", default=None),
-                    systematics_file_path=_resolve_species_path(cfg, path_cfg, sp, "systematics_input", generic_key="systematics_input", default=None),
-                    metadata_path=_resolve_species_path(cfg, path_cfg, sp, "metadata_output", generic_key="metadata_output", default="run_metadata.json"),
-                    species=_anti_species_name(sp),
-                    sections=list(report_cfg.get("sections", [])),
-                    fit_alpha=float(report_cfg.get("fit_alpha", 0.05)),
-                    fit_tail=str(report_cfg.get("fit_tail", "single")),
-                    tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
-                    data_file_path=_resolve_species_path(cfg, path_cfg, sp, "data_input", generic_key="data_input", default=None),
-                )
-                entries.append({"label": sp.upper(), "species": _anti_species_name(sp), "href": f"{sp}/index.html", "path": report_index})
-                LOGGER.info("Subreport generated [%s]: %s", sp, report_index)
-            dual_index = generate_dual_report_index(
-                report_dir=root_report_dir,
-                entries=entries,
-                metadata_path=path_cfg.get("metadata_output", "run_metadata.json"),
-            )
-            LOGGER.info("Combined report index generated: %s", dual_index)
+        report_index = generate_report(
+            report_dir=path_cfg.get("report_dir", f"{s.BASE_VARIANT_OUTPUT_DIR}report"),
+            signal_file_path=path_cfg.get("signal_input", s.SIGNAL_OUTPUT),
+            mc_file_path=path_cfg.get("mc_input", s.MC_FILENAME),
+            systematics_file_path=path_cfg.get("systematics_input", s.SYSTEMATICS_OUTPUT),
+            metadata_path=path_cfg.get("metadata_output", "run_metadata.json"),
+            species=f"anti{species}",
+            sections=list(report_cfg.get("sections", [])),
+            fit_alpha=float(report_cfg.get("fit_alpha", 0.05)),
+            fit_tail=str(report_cfg.get("fit_tail", "single")),
+            tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
+            data_file_path=path_cfg.get("data_input", s.DATA_FILENAME),
+        )
+        LOGGER.info("Report generated: %s", report_index)
     elif task == "full_chain":
-        data_outputs = {
-            sp: _resolve_species_path(
-                cfg,
-                path_cfg,
-                sp,
-                "data_output",
-                generic_key="data_output",
-                default=None,
-            )
-            for sp in species
-        }
-        mc_outputs = {
-            sp: _resolve_species_path(
-                cfg,
-                path_cfg,
-                sp,
-                "mc_output",
-                generic_key="mc_output",
-                default=None,
-            )
-            for sp in species
-        }
-        tasks.analyse_data_multi(path_cfg.get("data_tree", s.DATA_TREE_FILENAME), data_outputs, bool(run_cfg.get("skim", False)), draw)
-        tasks.analyse_mc_multi(path_cfg.get("mc_tree", s.MC_TREE_FILENAME), mc_outputs, bool(run_cfg.get("enable_trials", True)), draw)
+        data_out = path_cfg.get("data_output", s.DATA_FILENAME)
+        mc_out = path_cfg.get("mc_output", s.MC_FILENAME)
+        sig_out = path_cfg.get("signal_output", s.SIGNAL_OUTPUT)
+        syst_out = path_cfg.get("systematics_output", s.SYSTEMATICS_OUTPUT)
 
-        from .reporting import generate_dual_report_index, generate_report
+        tasks.analyse_data(path_cfg.get("data_tree", s.DATA_TREE_FILENAME), data_out, species, bool(run_cfg.get("skim", False)), draw)
+        tasks.analyse_mc(path_cfg.get("mc_tree", s.MC_TREE_FILENAME), mc_out, species, bool(run_cfg.get("enable_trials", True)), draw)
+        tasks.signal(data_out, sig_out)
+        tasks.systematics(sig_out, mc_out, path_cfg.get("data_analysis_results", s.DATA_ANALYSIS_RESULTS), syst_out)
 
-        entries = []
-        root_report_dir = path_cfg.get("report_dir", f"{s.BASE_VARIANT_OUTPUT_DIR}report")
-        for sp in species:
-            sig_out = _resolve_species_path(cfg, path_cfg, sp, "signal_output", generic_key="signal_output", default=None)
-            syst_out = _resolve_species_path(cfg, path_cfg, sp, "systematics_output", generic_key="systematics_output", default=None)
-            tasks.signal(data_outputs[sp], sig_out)
-            tasks.systematics(sig_out, mc_outputs[sp], path_cfg.get("data_analysis_results", s.DATA_ANALYSIS_RESULTS), syst_out)
-
-            if path_cfg.get("checkpoint_output"):
-                tasks.checkpoint(
-                    syst_out,
-                    path_cfg.get("data_analysis_results", s.DATA_ANALYSIS_RESULTS),
-                    mc_outputs[sp],
-                    path_cfg.get("mc_analysis_results", s.MC_ANALYSIS_RESULTS),
-                    sig_out,
-                    path_cfg.get("checkpoint_output"),
-                )
-
-            sub_report_dir = root_report_dir if len(species) == 1 else f"{root_report_dir}/{sp}"
-            report_index = generate_report(
-                report_dir=sub_report_dir,
-                signal_file_path=sig_out,
-                mc_file_path=mc_outputs[sp],
-                systematics_file_path=syst_out,
-                metadata_path=_resolve_species_path(cfg, path_cfg, sp, "metadata_output", generic_key="metadata_output", default="run_metadata.json"),
-                species=_anti_species_name(sp),
-                sections=list(report_cfg.get("sections", [])),
-                fit_alpha=float(report_cfg.get("fit_alpha", 0.05)),
-                fit_tail=str(report_cfg.get("fit_tail", "single")),
-                tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
-                data_file_path=data_outputs[sp],
+        if path_cfg.get("checkpoint_output"):
+            tasks.checkpoint(
+                syst_out,
+                path_cfg.get("data_analysis_results", s.DATA_ANALYSIS_RESULTS),
+                mc_out,
+                path_cfg.get("mc_analysis_results", s.MC_ANALYSIS_RESULTS),
+                sig_out,
+                path_cfg.get("checkpoint_output"),
             )
-            entries.append({"label": sp.upper(), "species": _anti_species_name(sp), "href": f"{sp}/index.html", "path": report_index})
-            LOGGER.info("Report generated [%s]: %s", sp, report_index)
-        if len(species) > 1:
-            dual_index = generate_dual_report_index(
-                report_dir=root_report_dir,
-                entries=entries,
-                metadata_path=path_cfg.get("metadata_output", "run_metadata.json"),
-            )
-            LOGGER.info("Combined report index generated: %s", dual_index)
+
+        from .reporting import generate_report
+
+        report_index = generate_report(
+            report_dir=path_cfg.get("report_dir", f"{s.BASE_VARIANT_OUTPUT_DIR}report"),
+            signal_file_path=sig_out,
+            mc_file_path=mc_out,
+            systematics_file_path=syst_out,
+            metadata_path=path_cfg.get("metadata_output", "run_metadata.json"),
+            species=f"anti{species}",
+            sections=list(report_cfg.get("sections", [])),
+            fit_alpha=float(report_cfg.get("fit_alpha", 0.05)),
+            fit_tail=str(report_cfg.get("fit_tail", "single")),
+            tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
+            data_file_path=data_out,
+        )
+        LOGGER.info("Report generated: %s", report_index)
     else:
         raise ValueError(f"Unsupported task: {task}")
     LOGGER.info("Finished run task=%s elapsed_sec=%.2f", task, time.time() - t0)

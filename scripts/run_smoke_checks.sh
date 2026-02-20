@@ -14,13 +14,11 @@ export DYLD_LIBRARY_PATH="$ROOT_LIB:${DYLD_LIBRARY_PATH:-}"
 
 mkdir -p /tmp/he3pp_validation
 
-REF_ROOT="$NUCLEI_INPUT/smoke_references/python_dual/LHC24_apass1__LHC25b9"
-REF_DATA_HE3="$REF_ROOT/DataHistos_he3_ref.root"
-REF_DATA_HE4="$REF_ROOT/DataHistos_he4_ref.root"
-REF_MC_HE3="$REF_ROOT/MChistos_he3_ref.root"
-REF_MC_HE4="$REF_ROOT/MChistos_he4_ref.root"
+REF_ROOT="$NUCLEI_INPUT/smoke_references/python_single/LHC24_apass1__LHC25b9"
+REF_DATA="$REF_ROOT/DataHistos_he3_ref.root"
+REF_MC="$REF_ROOT/MChistos_he3_ref.root"
 
-for p in "$REF_DATA_HE3" "$REF_DATA_HE4" "$REF_MC_HE3" "$REF_MC_HE4"; do
+for p in "$REF_DATA" "$REF_MC"; do
   if [[ ! -f "$p" ]]; then
     echo "Missing smoke reference: $p"
     echo "Generate references first with: scripts/update_smoke_references.sh"
@@ -45,47 +43,34 @@ python3 - <<'PY'
 import os
 from he3pp import tasks
 
-tasks.analyse_data_multi(
+tasks.analyse_data(
     os.environ["DATA_INPUT_FILE"],
-    {
-        "he3": "/tmp/he3pp_validation/DataHistos_he3_py.root",
-        "he4": "/tmp/he3pp_validation/DataHistos_he4_py.root",
-    },
+    "/tmp/he3pp_validation/DataHistos_he3_py.root",
+    "he3",
     skim=False,
     draw=False,
 )
 PY
 python3 scripts/validate_smoke.py \
-  --reference "$REF_DATA_HE3" \
+  --reference "$REF_DATA" \
   --candidate /tmp/he3pp_validation/DataHistos_he3_py.root \
-  --allow-extra-prefix nuclei/hTOFMassVsTPCnsigma
-python3 scripts/validate_smoke.py \
-  --reference "$REF_DATA_HE4" \
-  --candidate /tmp/he3pp_validation/DataHistos_he4_py.root \
   --allow-extra-prefix nuclei/hTOFMassVsTPCnsigma
 
 python3 - <<'PY'
 import os
 from he3pp import tasks
 
-tasks.analyse_mc_multi(
+tasks.analyse_mc(
     os.path.expandvars("$NUCLEI_INPUT/MC/LHC25b9/AO2D_coalescence.root"),
-    {
-        "he3": "/tmp/he3pp_validation/MChistos_he3_py.root",
-        "he4": "/tmp/he3pp_validation/MChistos_he4_py.root",
-    },
+    "/tmp/he3pp_validation/MChistos_he3_py.root",
+    "he3",
     enable_trials=True,
     draw=False,
 )
 PY
 python3 scripts/validate_smoke.py \
-  --reference "$REF_MC_HE3" \
+  --reference "$REF_MC" \
   --candidate /tmp/he3pp_validation/MChistos_he3_py.root \
-  --normalize-weff \
-  --ignore-errors
-python3 scripts/validate_smoke.py \
-  --reference "$REF_MC_HE4" \
-  --candidate /tmp/he3pp_validation/MChistos_he4_py.root \
   --normalize-weff \
   --ignore-errors
 
