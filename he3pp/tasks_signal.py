@@ -5,6 +5,7 @@ import ROOT
 
 from .root_io import ensure_parent, expand, load_fit_modules, ptr
 from .settings import RuntimeConfig
+from .tasks_common import resolve_tpc_model_matrix
 
 
 LOGGER = logging.getLogger("he3pp.tasks")
@@ -79,13 +80,13 @@ def signal(
     ptr(f_lnl.mSigma).setVal(ROOT.TMath.Exp(1.0))
     ptr(f_lnl.mMu).setRange(-0.5, 0.5)
 
+    available_tpc_model_names = ["GausGaus", "ExpGaus", "ExpTailGaus", "LognormalLognormal"]
     tpc_functions = [f_gg, f_eg, f_etg, f_lnl]
-    tpc_model_names = [str(name) for name in cfg.tpc_function_names]
-    if len(tpc_model_names) > len(tpc_functions):
-        raise RuntimeError(
-            f"Configured {len(tpc_model_names)} TPC function names but only {len(tpc_functions)} fit functions are available."
-        )
-    n_tpc_functions = len(tpc_model_names)
+    tpc_model_matrix = resolve_tpc_model_matrix(
+        [str(name) for name in cfg.tpc_function_names],
+        available_tpc_model_names[: len(tpc_functions)],
+    )
+    n_tpc_functions = len(tpc_model_matrix)
 
     for key in in_file.GetListOfKeys():
         key_name = key.GetName()
@@ -140,7 +141,7 @@ def signal(
 
         for i_s in range(2):
             i_c = 0
-            for i_t, model_name in enumerate(tpc_model_names):
+            for i_t, (model_name, _) in enumerate(tpc_model_matrix):
                 h_tpconly[i_s][i_c][i_t] = ROOT.TH1D(f"hTPConly{cfg.letter[i_s]}{i_c}_{model_name}", ";p_{T} GeV/c; TPC raw counts", n_pt_bins, pt_labels.GetArray())
                 h_npar_tpc[i_s][i_c][i_t] = ROOT.TH1D(f"hNFloatParsTPC{cfg.letter[i_s]}{i_c}_{model_name}", "; p_{T}(GeV/c); N_{float} (TPC fit)", n_pt_bins, pt_labels.GetArray())
             h_signif[i_s][i_c] = ROOT.TH1D(f"hSignificance{cfg.letter[i_s]}{i_c}", "; p_{T}(GeV/c); #frac{S}{#sqrt{S+B}}", n_pt_bins, pt_labels.GetArray())
@@ -241,14 +242,15 @@ def signal(
                 if center_pt < cfg.tpc_max_pt:
                     d_out.cd(f"{species_names[i_s]}/TPConly")
                     tpc_dat = tpc_h[i_s].ProjectionY(f"tpc_data{i_c}_{i_b}", i_b + 1, i_b + 1)
-                    for i_t, model_name in enumerate(tpc_model_names):
+                    for i_t, (model_name, model_index) in enumerate(tpc_model_matrix):
                         fit_range = "Special" if (i_t and center_pt < 1.8) else "Full"
-                        tpc_plot = tpc_functions[i_t].FitData(tpc_dat, f"TPC_d_{i_c}_{i_b}_{model_name}", i_title, fit_range, fit_range)
-                        ptr(tpc_functions[i_t].mSigma).setConstant(False)
+                        fit_func = tpc_functions[model_index]
+                        tpc_plot = fit_func.FitData(tpc_dat, f"TPC_d_{i_c}_{i_b}_{model_name}", i_title, fit_range, fit_range)
+                        ptr(fit_func.mSigma).setConstant(False)
                         tpc_plot.Write()
-                        h_npar_tpc[i_s][i_c][i_t].SetBinContent(i_b + 1, float(getattr(tpc_functions[i_t], "mNFloatPars", 0)))
-                        h_tpconly[i_s][i_c][i_t].SetBinContent(i_b + 1, ptr(tpc_functions[i_t].mSigCounts).getVal())
-                        h_tpconly[i_s][i_c][i_t].SetBinError(i_b + 1, ptr(tpc_functions[i_t].mSigCounts).getError())
+                        h_npar_tpc[i_s][i_c][i_t].SetBinContent(i_b + 1, float(getattr(fit_func, "mNFloatPars", 0)))
+                        h_tpconly[i_s][i_c][i_t].SetBinContent(i_b + 1, ptr(fit_func.mSigCounts).getVal())
+                        h_tpconly[i_s][i_c][i_t].SetBinError(i_b + 1, ptr(fit_func.mSigCounts).getError())
 
         for i_s in range(2):
             i_c = 0

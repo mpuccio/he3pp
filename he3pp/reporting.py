@@ -12,6 +12,7 @@ import ROOT
 
 from .settings import RuntimeConfig
 from .root_io import expand
+from .report_logic import status_from_metrics
 
 
 @dataclass
@@ -330,11 +331,7 @@ def _nfit_from_metadata(sig_file: ROOT.TFile, section: str, species: str, tpc_si
 
 
 def _status_from_metrics(available: bool, metrics: dict[str, float], alpha: float) -> tuple[str, str]:
-    if not available:
-        return "MISSING", "missing"
-    if not metrics:
-        return "UNK", "unknown"
-    return ("OK", "ok") if metrics["p_value"] >= alpha else ("KO", "ko")
+    return status_from_metrics(available, metrics, alpha)
 
 
 def _hist_visible_max(h: Any) -> float:

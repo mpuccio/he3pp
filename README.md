@@ -111,3 +111,19 @@ scripts/run_smoke_checks.sh
 
 Reference location used by smoke checks:
 `$NUCLEI_INPUT/smoke_references/python_single/LHC24_apass1__LHC25b9/`
+
+Legacy `tests/smoke/*.toml` files were retired; smoke is driven directly by the shell scripts above.
+
+## Regression tests
+
+Lightweight regression checks (kept separate from smoke):
+
+```bash
+scripts/run_regression_tests.sh
+```
+
+Coverage includes:
+- config/path derivation
+- TPC model production matrix mapping/validation
+- report fit-status classification (`OK`/`KO`/`UNK`/`MISSING`)
+- MC trial variation changing at least one trial histogram vs default (using smoke reference MC ROOT file)

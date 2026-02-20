@@ -1,7 +1,5 @@
 from typing import Any
 
-import ROOT
-
 from .settings import RuntimeConfig
 
 
@@ -12,6 +10,30 @@ def default_tpc_model_name(runtime_config: RuntimeConfig) -> str:
 def weighted_eff_name(base: str) -> str:
     # Weighted efficiencies intentionally use "Weff*" naming.
     return f"W{base}"
+
+
+def resolve_tpc_model_matrix(configured_names: list[str], available_model_names: list[str]) -> list[tuple[str, int]]:
+    configured = [str(name) for name in configured_names]
+    available = [str(name) for name in available_model_names]
+    if not configured:
+        raise RuntimeError("Configured tpc_function_names is empty.")
+    if len(configured) > len(available):
+        raise RuntimeError(
+            f"Configured {len(configured)} TPC function names but only {len(available)} fit functions are available."
+        )
+
+    seen: set[str] = set()
+    matrix: list[tuple[str, int]] = []
+    for name in configured:
+        if name in seen:
+            raise RuntimeError(f"Duplicated TPC function name in configuration: '{name}'.")
+        if name not in available:
+            raise RuntimeError(
+                f"Unsupported TPC function name '{name}'. Available: {', '.join(available)}."
+            )
+        matrix.append((name, available.index(name)))
+        seen.add(name)
+    return matrix
 
 
 def collect_rresult_ptrs(obj: Any) -> list[Any]:
@@ -32,6 +54,8 @@ def collect_rresult_ptrs(obj: Any) -> list[Any]:
 def run_graphs(actions: list[Any]) -> None:
     if not actions:
         return
+    import ROOT
+
     run_graphs_impl = getattr(getattr(ROOT, "RDF", None), "RunGraphs", None)
     if run_graphs_impl:
         run_graphs_impl(actions)
