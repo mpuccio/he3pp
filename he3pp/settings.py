@@ -10,37 +10,74 @@ except ModuleNotFoundError:  # pragma: no cover - runtime compatibility path
     import tomli as tomllib
 
 
-DEFAULTS_TOML = Path(__file__).with_name("defaults.toml")
+DEFAULTS_DIR = Path(__file__).parent
+DEFAULTS_BY_SPECIES = {
+    "he3": DEFAULTS_DIR / "defaults_he3.toml",
+    "he4": DEFAULTS_DIR / "defaults_he4.toml",
+}
 CENT_LENGTH = 1
 # Weighted efficiency histograms are intentionally named "Weff*".
 WEIGHTED_EFF_NAMING_POLICY = "prefix_W"
 
 
-def _load_default_config_from_toml() -> dict[str, Any]:
-    with open(DEFAULTS_TOML, "rb") as f:
+def _load_toml(path: Path) -> dict[str, Any]:
+    with open(path, "rb") as f:
         cfg = tomllib.load(f)
     if not isinstance(cfg, dict):
-        raise ValueError(f"Invalid defaults TOML at {DEFAULTS_TOML}: top-level table is missing.")
+        raise ValueError(f"Invalid defaults TOML at {path}: top-level table is missing.")
     return cfg
 
 
-DEFAULT_CONFIG = _load_default_config_from_toml()
+_DEFAULT_CONFIG_CACHE: dict[str, dict[str, Any]] = {}
 
 
-def default_config_template() -> dict[str, Any]:
-    return copy.deepcopy(DEFAULT_CONFIG)
+def _normalize_species_name(species: str | None) -> str:
+    key = str(species or "he3").strip().lower()
+    if key not in DEFAULTS_BY_SPECIES:
+        raise ValueError(
+            f"Unsupported species '{key}'. Supported defaults: {', '.join(sorted(DEFAULTS_BY_SPECIES))}."
+        )
+    return key
+
+
+def _species_from_run_cfg(run_cfg: dict[str, Any] | None) -> str | None:
+    if not isinstance(run_cfg, dict):
+        return None
+    raw = run_cfg.get("species")
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        return str(raw).strip().lower()
+    values = [str(v).strip().lower() for v in list(raw)]
+    if len(values) != 1:
+        raise ValueError("Single-particle mode: run.species must contain exactly one value.")
+    return values[0]
+
+
+def _species_hint_from_cfg(cfg: dict[str, Any] | None) -> str | None:
+    if not isinstance(cfg, dict):
+        return None
+    return _species_from_run_cfg(cfg.get("run"))
+
+
+def default_config_template(species: str | None = None) -> dict[str, Any]:
+    key = _normalize_species_name(species)
+    if key not in _DEFAULT_CONFIG_CACHE:
+        path = DEFAULTS_BY_SPECIES[key]
+        _DEFAULT_CONFIG_CACHE[key] = _load_toml(path)
+    return copy.deepcopy(_DEFAULT_CONFIG_CACHE[key])
 
 
 def _required_table(table: dict[str, Any], key: str, context: str = "defaults") -> dict[str, Any]:
     value = table.get(key)
     if not isinstance(value, dict):
-        raise ValueError(f"Missing or invalid [{key}] table in {context} TOML: {DEFAULTS_TOML}")
+        raise ValueError(f"Missing or invalid [{key}] table in {context} config")
     return value
 
 
 def _required_value(table: dict[str, Any], key: str, context: str) -> Any:
     if key not in table:
-        raise ValueError(f"Missing required key '{context}.{key}' in {DEFAULTS_TOML}")
+        raise ValueError(f"Missing required key '{context}.{key}'")
     return table[key]
 
 
@@ -54,8 +91,9 @@ def _deep_merge_dict(base: dict[str, Any], override: dict[str, Any]) -> dict[str
     return out
 
 
-def merge_config(cfg: dict[str, Any] | None) -> dict[str, Any]:
-    merged = default_config_template()
+def merge_config(cfg: dict[str, Any] | None, species: str | None = None) -> dict[str, Any]:
+    hint = species or _species_hint_from_cfg(cfg) or "he3"
+    merged = default_config_template(hint)
     if not isinstance(cfg, dict):
         return merged
     return _deep_merge_dict(merged, cfg)
@@ -70,12 +108,10 @@ class RuntimePaths:
     base_variant_output_dir: str
     data_tree_filename: str
     data_filename: str
-    data_filename_he4: str
     data_analysis_results: str
     mc_analysis_results: str
     mc_tree_filename: str
     mc_filename: str
-    mc_filename_he4: str
     signal_output: str
     systematics_output: str
 
@@ -123,110 +159,68 @@ class RuntimeConfig:
         return copy.deepcopy(self.particle_configs[species])
 
 
-def _resolve_particle_templates(particle_profiles: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    resolved: dict[str, dict[str, Any]] = {}
+def _resolve_particle_profile(species: str, particle_table: dict[str, Any], stack: list[str]) -> dict[str, Any]:
+    if species in stack:
+        cycle = " -> ".join(stack + [species])
+        raise ValueError(f"Circular particle template chain: {cycle}")
 
-    def resolve(species: str, stack: list[str]) -> dict[str, Any]:
-        if species in resolved:
-            return copy.deepcopy(resolved[species])
-        if species in stack:
-            cycle = " -> ".join(stack + [species])
-            raise ValueError(f"Circular particle template chain: {cycle}")
-        if species not in particle_profiles:
-            raise ValueError(f"Unknown particle template target '{species}'.")
+    profile = particle_table.get(species)
+    if not isinstance(profile, dict):
+        raise ValueError(f"Missing [particle.{species}] table in config.")
 
-        profile = copy.deepcopy(particle_profiles[species])
-        template = profile.get("template")
-        if template is None:
-            resolved_profile = profile
-        else:
-            template_key = str(template)
-            base = resolve(template_key, stack + [species])
-            for key, value in profile.items():
-                if key == "template":
-                    continue
-                base[key] = value
-            resolved_profile = base
+    own = copy.deepcopy(profile)
+    template = own.pop("template", None)
+    if template is None:
+        return own
 
-        resolved[species] = resolved_profile
-        return copy.deepcopy(resolved_profile)
-
-    for species_key in particle_profiles:
-        resolve(species_key, [])
-    return resolved
+    template_key = str(template).strip().lower()
+    base = _resolve_particle_profile(template_key, particle_table, stack + [species])
+    base.update(own)
+    return base
 
 
-def _build_particle_configs(cfg: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _build_particle_configs(cfg: dict[str, Any], species: str) -> dict[str, dict[str, Any]]:
     selections = _required_table(cfg, "selections", "config")
-    sel_he3 = _required_table(selections, "he3", "selections")
-    sel_he4 = _required_table(selections, "he4", "selections")
+    sel_species = _required_table(selections, species, "selections")
+    particle_table = _required_table(cfg, "particle", "config")
 
-    particle_cfg = _required_table(cfg, "particle", "config")
-    base_profiles = {
-        str(key): copy.deepcopy(value)
-        for key, value in particle_cfg.items()
-        if isinstance(value, dict)
-    }
+    profile = _resolve_particle_profile(species, particle_table, [])
 
-    if "he3" not in base_profiles or "he4" not in base_profiles:
+    base_sel = str(_required_value(sel_species, "base_rec", f"selections.{species}"))
+    primary_raw = sel_species.get("primary_rec", sel_species.get("default_rec"))
+    if primary_raw is None:
         raise ValueError(
-            f"config must define [particle.he3] and [particle.he4]. Found: {', '.join(sorted(base_profiles))}."
+            f"Missing required key 'selections.{species}.primary_rec' (or 'default_rec')."
         )
+    primary_sel = str(primary_raw)
+    secondary_sel = str(_required_value(sel_species, "secondary_rec", f"selections.{species}"))
 
-    # Keep known species defaults centralized in configuration-derived values.
-    base_profiles["he3"]["tof_nsigma_cut"] = float(_required_value(sel_he3, "nsigma_tof", "selections.he3"))
-    base_profiles["he3"]["trial_dca_sel"] = str(_required_value(sel_he3, "trial_dca", "selections.he3"))
-    base_profiles["he3"]["base_sel"] = str(_required_value(sel_he3, "base_rec", "selections.he3"))
-    base_profiles["he3"]["primary_sel"] = str(_required_value(sel_he3, "default_rec", "selections.he3"))
-    base_profiles["he3"]["secondary_sel"] = str(_required_value(sel_he3, "secondary_rec", "selections.he3"))
-    base_profiles["he3"]["mc_reco_base_sel"] = (
-        f"{str(_required_value(sel_he3, 'base_rec', 'selections.he3'))}"
-        f"{str(_required_value(sel_he3, 'mc_reco_append', 'selections.he3'))}"
-    )
-    base_profiles["he3"]["mc_reco_sel"] = str(_required_value(sel_he3, "default_rec", "selections.he3"))
-    base_profiles["he3"]["mc_gen_sel"] = str(_required_value(sel_he3, "mc_gen", "selections.he3"))
-    base_profiles["he3"]["mc_signal_tracking"] = ""
+    profile["base_sel"] = base_sel
+    profile["primary_sel"] = primary_sel
+    profile["secondary_sel"] = secondary_sel
+    profile["trial_dca_sel"] = str(sel_species.get("trial_dca", profile.get("trial_dca_sel", "")))
+    profile["tof_nsigma_cut"] = float(_required_value(sel_species, "nsigma_tof", f"selections.{species}"))
 
-    base_profiles["he4"]["tof_nsigma_cut"] = float(_required_value(sel_he4, "nsigma_tof", "selections.he4"))
-    base_profiles["he4"]["trial_dca_sel"] = ""
-    base_profiles["he4"]["base_sel"] = str(_required_value(sel_he4, "base_rec", "selections.he4"))
-    base_profiles["he4"]["primary_sel"] = str(_required_value(sel_he4, "primary_rec", "selections.he4"))
-    base_profiles["he4"]["secondary_sel"] = str(_required_value(sel_he4, "secondary_rec", "selections.he4"))
-    base_profiles["he4"]["mc_reco_base_sel"] = ""
-    base_profiles["he4"]["mc_reco_sel"] = str(_required_value(sel_he4, "mc_reco", "selections.he4"))
-    base_profiles["he4"]["mc_gen_sel"] = str(_required_value(sel_he4, "mc_gen", "selections.he4"))
-    base_profiles["he4"]["mc_signal_tracking"] = str(_required_value(sel_he4, "mc_signal_tracking", "selections.he4"))
+    if "mc_reco_base" in sel_species:
+        profile["mc_reco_base_sel"] = str(sel_species["mc_reco_base"])
+    elif "mc_reco_append" in sel_species:
+        profile["mc_reco_base_sel"] = f"{base_sel}{str(sel_species['mc_reco_append'])}"
+    else:
+        profile["mc_reco_base_sel"] = str(profile.get("mc_reco_base_sel", ""))
 
-    resolved_profiles = _resolve_particle_templates(base_profiles)
+    if "mc_reco" in sel_species:
+        profile["mc_reco_sel"] = str(sel_species["mc_reco"])
+    else:
+        profile["mc_reco_sel"] = str(profile.get("mc_reco_sel", primary_sel))
 
-    # Apply per-species selection overrides for all configured particles.
-    for species_key, species_cfg in resolved_profiles.items():
-        sel_species = selections.get(species_key)
-        if not isinstance(sel_species, dict):
-            continue
+    if "mc_gen" in sel_species:
+        profile["mc_gen_sel"] = str(sel_species["mc_gen"])
+    elif "mc_gen_sel" not in profile:
+        raise ValueError(f"Missing required key 'selections.{species}.mc_gen' or particle profile mc_gen_sel.")
 
-        if "base_rec" in sel_species:
-            species_cfg["base_sel"] = str(sel_species["base_rec"])
-        if "primary_rec" in sel_species or "default_rec" in sel_species:
-            species_cfg["primary_sel"] = str(sel_species.get("primary_rec", sel_species.get("default_rec")))
-        if "secondary_rec" in sel_species:
-            species_cfg["secondary_sel"] = str(sel_species["secondary_rec"])
-        if "trial_dca" in sel_species:
-            species_cfg["trial_dca_sel"] = str(sel_species["trial_dca"])
-        if "nsigma_tof" in sel_species:
-            species_cfg["tof_nsigma_cut"] = float(sel_species["nsigma_tof"])
-        if "mc_reco_base" in sel_species:
-            species_cfg["mc_reco_base_sel"] = str(sel_species["mc_reco_base"])
-        elif "mc_reco_append" in sel_species:
-            species_cfg["mc_reco_base_sel"] = f"{species_cfg.get('base_sel', '')}{str(sel_species['mc_reco_append'])}"
-        if "mc_reco" in sel_species:
-            species_cfg["mc_reco_sel"] = str(sel_species["mc_reco"])
-        if "mc_gen" in sel_species:
-            species_cfg["mc_gen_sel"] = str(sel_species["mc_gen"])
-        if "mc_signal_tracking" in sel_species:
-            species_cfg["mc_signal_tracking"] = str(sel_species["mc_signal_tracking"])
+    profile["mc_signal_tracking"] = str(sel_species.get("mc_signal_tracking", profile.get("mc_signal_tracking", "")))
 
-    return resolved_profiles
+    return {species: profile}
 
 
 def _build_runtime_paths(common: dict[str, Any]) -> RuntimePaths:
@@ -249,12 +243,10 @@ def _build_runtime_paths(common: dict[str, Any]) -> RuntimePaths:
         base_variant_output_dir=base_variant_output_dir,
         data_tree_filename=f"{base_input_dir}data/{period}/{reco_pass}/{data_tree_basename}",
         data_filename=f"{base_variant_output_dir}DataHistos.root",
-        data_filename_he4=f"{base_variant_output_dir}DataHistosHe4.root",
         data_analysis_results=f"{base_input_dir}data/{period}/{reco_pass}/{data_analysis_results_basename}",
         mc_analysis_results=f"{base_input_dir}MC/{mc_production}/{mc_analysis_results_basename}",
         mc_tree_filename=f"{base_input_dir}MC/{mc_production}/{mc_tree_basename}",
         mc_filename=f"{base_variant_output_dir}MChistos.root",
-        mc_filename_he4=f"{base_variant_output_dir}MChistosHe4.root",
         signal_output=f"{base_variant_output_dir}signal.root",
         systematics_output=f"{base_variant_output_dir}systematics.root",
     )
@@ -262,6 +254,11 @@ def _build_runtime_paths(common: dict[str, Any]) -> RuntimePaths:
 
 def current_runtime_config(cfg: dict[str, Any] | None = None) -> RuntimeConfig:
     merged = merge_config(cfg)
+
+    run_cfg = _required_table(merged, "run", "config")
+    species = _species_from_run_cfg(run_cfg)
+    if species is None:
+        raise ValueError("Missing run.species in config.")
 
     common = _required_table(merged, "common", "config")
     selections = _required_table(merged, "selections", "config")
@@ -292,7 +289,7 @@ def current_runtime_config(cfg: dict[str, Any] | None = None) -> RuntimeConfig:
     }
 
     paths = _build_runtime_paths(common)
-    particle_configs = _build_particle_configs(merged)
+    particle_configs = _build_particle_configs(merged, species)
 
     return RuntimeConfig(
         variant=str(_required_value(common, "variant", "common")),

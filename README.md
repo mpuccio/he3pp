@@ -6,8 +6,9 @@ Unified, config-driven PyROOT workflow for anti-He3/anti-He4 analysis.
 
 - `he3_cli.py`: thin entrypoint.
 - `he3pp/cli.py`: config loading + task dispatch.
-- `he3pp/defaults.toml`: canonical default configuration (common, selections, cuts, run/report, particle profiles).
-- `he3pp/settings.py`: runtime settings/state loaded from `he3pp/defaults.toml` + user TOML overrides.
+- `he3pp/defaults_he3.toml`: canonical default configuration for He3.
+- `he3pp/defaults_he4.toml`: canonical default configuration for He4.
+- `he3pp/settings.py`: runtime settings/state loaded from species defaults + user TOML overrides.
 - `he3pp/root_io.py`: ROOT/PyROOT helpers and column definitions.
 - `he3pp/tasks.py`: analysis tasks.
 - `config.example.toml`: full config template.
@@ -55,15 +56,16 @@ python3 he3_cli.py --config config.example.toml --dump-default-config
 
 ## Config schema
 
-- Built-in defaults live in `he3pp/defaults.toml`; your `--config` file only needs to override what you want to change.
+- Built-in defaults live in `he3pp/defaults_he3.toml` and `he3pp/defaults_he4.toml`; your `--config` file only needs to override what you want to change.
+  - The base defaults are selected from `run.species` (`he3` or `he4`) before overrides are merged.
 - `[common]`: former `Common.h` style constants (period, reco pass, pt bins, ranges, etc.)
   - Input paths are derived from `period`/`reco_pass` (data) and `mc_production` (MC) plus optional basename keys:
   `data_tree_basename`, `data_analysis_results_basename`, `mc_tree_basename`, `mc_analysis_results_basename`
 - `[selections.common]`: shared selection snippets (e.g. skim template)
-- `[selections.<species>]`: species-specific selections (required for the species selected in `[run].species`)
+- `[selections.<species>]`: species-specific selections (required only for the species selected in `[run].species`)
 - `[cuts]`: trial scan grids (`nsigmaDCAz`, `fTPCnCls`, `nITScls`, `nsigmaTPC`)
 - `[run]`: task + runtime flags
-- `[particle.<species>]`: particle-profile definitions/overrides (mass, PDG, labels, key column names); extra species can be added via `template = "he3"` or `template = "he4"`
+- `[particle.<species>]`: particle-profile definitions/overrides (mass, PDG, labels, key column names) for the selected species
 - `[paths]`: optional overrides only (all standard IO paths are auto-derived from `[common]` + `run.species`)
 
 Logging and metadata:
@@ -85,7 +87,7 @@ Available report sections include:
 
 Single-particle mode:
 - Select one species with `[run].species`
-- Provide the matching selection section (`[selections.<species>]`)
+- Provide the matching selection and particle sections for that species only
 - Use task-specific keys under `[paths]` only when you need custom routing (`data_tree`, `mc_tree`, `*_output`, `*_input`, `report_dir`, etc.)
 
 ## Tasks

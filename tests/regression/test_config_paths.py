@@ -29,9 +29,19 @@ class TestConfigAndPathDerivation(unittest.TestCase):
     def test_merge_config_keeps_nested_defaults(self) -> None:
         merged = s.merge_config({"selections": {"he3": {"nsigma_tof": 2.4}}})
 
-        self.assertIn("he4", merged["selections"])
-        self.assertIn("mc_reco", merged["selections"]["he4"])
+        self.assertIn("he3", merged["selections"])
+        self.assertNotIn("he4", merged["selections"])
+        self.assertIn("mc_reco_append", merged["selections"]["he3"])
         self.assertEqual(merged["selections"]["he3"]["nsigma_tof"], 2.4)
+
+    def test_merge_config_selects_he4_defaults_when_requested(self) -> None:
+        merged = s.merge_config({"run": {"species": "he4"}})
+
+        self.assertEqual(merged["run"]["species"], "he4")
+        self.assertIn("he4", merged["selections"])
+        self.assertNotIn("he3", merged["selections"])
+        self.assertIn("he4", merged["particle"])
+        self.assertNotIn("he3", merged["particle"])
 
     def test_particle_overlay_applies_to_runtime_profile(self) -> None:
         runtime = s.current_runtime_config({"selections": {"he3": {"nsigma_tof": 2.1}}})

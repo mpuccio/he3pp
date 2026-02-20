@@ -1,9 +1,10 @@
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-from .settings import RuntimeConfig
+if TYPE_CHECKING:
+    from .settings import RuntimeConfig
 
 
-def default_tpc_model_name(runtime_config: RuntimeConfig) -> str:
+def default_tpc_model_name(runtime_config: "RuntimeConfig") -> str:
     return "ExpGaus" if "ExpGaus" in runtime_config.tpc_function_names else str(runtime_config.tpc_function_names[0])
 
 

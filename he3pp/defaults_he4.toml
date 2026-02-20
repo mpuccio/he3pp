@@ -1,0 +1,83 @@
+[common]
+period = "LHC24"
+reco_pass = "apass1"
+mc_production = "LHC25b9"
+variant = "default"
+base_input_dir = "$NUCLEI_INPUT/"
+base_output_root = "$NUCLEI_OUTPUT/"
+filter_list_name = "nuclei"
+data_tree_basename = "AO2D_skimmed.root"
+data_analysis_results_basename = "AnalysisResults_skimmed.root"
+mc_tree_basename = "AO2D_coalescence.root"
+mc_analysis_results_basename = "AnalysisResults.root"
+pt_bins = [1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0]
+cent_pt_limits = [7.0]
+tpc_max_pt = 7.0
+tof_min_pt = 1.0
+pt_range = [1.4, 7.0]
+tpc_function_names = ["GausGaus", "ExpGaus", "ExpTailGaus", "LognormalLognormal"]
+
+[selections.common]
+skim_template = "std::abs(nsigmaDCAz) < 8 && std::abs(fDCAxy) < 0.2 && std::abs({nsigma}) < 5"
+
+[selections.he4]
+base_rec = "fTPCnCls >= 110 && nITScls >= 5 && abs(fEta) < 0.9 && std::abs(fDCAxy) < 0.7 && ptHe4 > 0.5 && ptHe4 < 9.0"
+primary_rec = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) < 7 && std::abs(fDCAxy) < 0.2"
+secondary_rec = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) > 7 && std::abs(fDCAxy) < 0.2"
+nsigma_tof = 3.0
+mc_pid = "isHe4 && isPrimary"
+mc_reco = "nITScls > 4 && fTPCnCls > 110 && std::abs(fEta) < 0.9 && std::abs(rapidity) < 0.5"
+mc_gen = "std::abs(yMC) < 0.5"
+mc_signal_tracking = "fTPCnCls > 120 && nITScls >= 6 && std::abs(fDCAz) < 0.7"
+
+[cuts]
+nsigmaDCAz = [6.0, 7.0, 8.0]
+fTPCnCls = [110.0, 120.0, 130.0]
+nITScls = [5.0, 6.0, 7.0]
+nsigmaTPC = [3.0, 4.0, 5.0]
+
+[run]
+task = "analyse_data"
+species = "he4"
+enable_mt = true
+nthreads = 0
+enable_trials = true
+skim = false
+draw = false
+log_level = "INFO"
+
+[report]
+sections = ["signal_tof", "signal_tpc", "tof_tpc_2d", "efficiency", "pt_resolution", "corrected_spectrum"]
+fit_alpha = 0.05
+fit_tail = "single"
+tpc_signal_model = "ExpGaus"
+
+[particle.he4]
+name = "he4"
+anti_name = "antihe4"
+label_matter = "^{4}He"
+label_antimatter = "^{4}#bar{He}"
+mass = 3.72738
+mc_mass = 3.72738
+pdg_abs = 1000020040
+nsigma_col = "nsigmaHe4"
+mass_cut_col = "hasGoodTOFmassHe4"
+pt_col = "ptHe4"
+dmass_col = "deltaMassHe4"
+tof_mass_range_min = -0.6
+tof_mass_range_max = 0.6
+tpc_apply_mass_cut = false
+tpc_pt_col_anti = "ptUncorr"
+tpc_pt_col_matter = "ptHe4"
+tpc_anti_nbins = 160
+tpc_anti_xmin = 0.5
+tpc_anti_xmax = 4.5
+trial_enabled = false
+mc_hist_suffix = "He4"
+mc_pt_corr_col = "ptHe4"
+mc_delta_x_col = "ptUncorr"
+
+[paths]
+metadata_output = ""
+log_file = ""
+checkpoint_output = ""

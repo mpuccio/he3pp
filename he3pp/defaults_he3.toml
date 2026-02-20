@@ -29,16 +29,6 @@ nsigma_tof = 3.5
 mc_reco_append = "&& isPrimary"
 mc_gen = "isPrimary && std::abs(yMC) < 0.5"
 
-[selections.he4]
-base_rec = "fTPCnCls >= 110 && nITScls >= 5 && abs(fEta) < 0.9 && std::abs(fDCAxy) < 0.7 && ptHe4 > 0.5 && ptHe4 < 9.0"
-primary_rec = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) < 7 && std::abs(fDCAxy) < 0.2"
-secondary_rec = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) > 7 && std::abs(fDCAxy) < 0.2"
-nsigma_tof = 3.0
-mc_pid = "isHe4 && isPrimary"
-mc_reco = "nITScls > 4 && fTPCnCls > 110 && std::abs(fEta) < 0.9 && std::abs(rapidity) < 0.5"
-mc_gen = "std::abs(yMC) < 0.5"
-mc_signal_tracking = "fTPCnCls > 120 && nITScls >= 6 && std::abs(fDCAz) < 0.7"
-
 [cuts]
 nsigmaDCAz = [6.0, 7.0, 8.0]
 fTPCnCls = [110.0, 120.0, 130.0]
@@ -85,31 +75,6 @@ trial_enabled = true
 mc_hist_suffix = "He3"
 mc_pt_corr_col = "pt"
 mc_delta_x_col = "pt"
-
-[particle.he4]
-name = "he4"
-anti_name = "antihe4"
-label_matter = "^{4}He"
-label_antimatter = "^{4}#bar{He}"
-mass = 3.72738
-mc_mass = 3.72738
-pdg_abs = 1000020040
-nsigma_col = "nsigmaHe4"
-mass_cut_col = "hasGoodTOFmassHe4"
-pt_col = "ptHe4"
-dmass_col = "deltaMassHe4"
-tof_mass_range_min = -0.6
-tof_mass_range_max = 0.6
-tpc_apply_mass_cut = false
-tpc_pt_col_anti = "ptUncorr"
-tpc_pt_col_matter = "ptHe4"
-tpc_anti_nbins = 160
-tpc_anti_xmin = 0.5
-tpc_anti_xmax = 4.5
-trial_enabled = false
-mc_hist_suffix = "He4"
-mc_pt_corr_col = "ptHe4"
-mc_delta_x_col = "ptUncorr"
 
 [paths]
 metadata_output = ""
