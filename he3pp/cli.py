@@ -259,7 +259,7 @@ def run(cfg: dict) -> None:
             selected_outputs[species[0]] = path_cfg.get("output")
         tasks.analyse_data_multi(input_file, selected_outputs, bool(run_cfg.get("skim", False)), draw)
     elif task == "analyse_mc":
-        input_file = path_cfg.get("input", s.MC_TREE_FILENAME)
+        input_file = path_cfg.get("mc_tree", s.MC_TREE_FILENAME)
         selected_outputs = {
             sp: _resolve_species_path(
                 cfg,
