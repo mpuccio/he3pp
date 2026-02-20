@@ -69,23 +69,6 @@ def _parse_species(run_cfg: dict, allowed_species: set[str]) -> str:
     return value
 
 
-def _species_stage_paths(species: str) -> dict[str, str]:
-    base = f"{s.BASE_VARIANT_OUTPUT_DIR}{species}/"
-    return {
-        "data_output": f"{base}DataHistos.root",
-        "data_input": f"{base}DataHistos.root",
-        "mc_output": f"{base}MChistos.root",
-        "mc_input": f"{base}MChistos.root",
-        "signal_output": f"{base}signal.root",
-        "signal_input": f"{base}signal.root",
-        "systematics_output": f"{base}systematics.root",
-        "systematics_input": f"{base}systematics.root",
-        "checkpoint_output": f"{base}checkpoint.root",
-        "metadata_output": f"{base}run_metadata.json",
-        "report_dir": f"{base}report",
-    }
-
-
 def run(cfg: dict, user_cfg: dict | None = None) -> None:
     run_cfg = cfg.get("run", {})
     report_cfg = cfg.get("report", {})
@@ -109,16 +92,15 @@ def run(cfg: dict, user_cfg: dict | None = None) -> None:
             )
     LOGGER.info("Starting run task=%s species=%s", run_cfg.get("task", "analyse_data"), species)
 
-    s.apply_runtime_overrides(cfg)
-    runtime_cfg = s.current_runtime_config()
-    from . import tasks  # lazy import so tasks bind runtime-overridden settings
+    runtime_cfg = s.current_runtime_config(cfg)
+    from . import tasks
 
     user_paths = (user_cfg or {}).get("paths", {})
     if not isinstance(user_paths, dict):
         user_paths = {}
 
     path_cfg = dict(cfg.get("paths", {}))
-    species_defaults = _species_stage_paths(species)
+    species_defaults = runtime_cfg.paths.species_stage_paths(species)
     for key, value in species_defaults.items():
         if key not in user_paths:
             path_cfg[key] = value
@@ -136,20 +118,20 @@ def run(cfg: dict, user_cfg: dict | None = None) -> None:
 
     t0 = time.time()
     if task == "analyse_data":
-        input_file = path_cfg.get("data_tree", s.DATA_TREE_FILENAME)
+        input_file = path_cfg.get("data_tree", runtime_cfg.paths.data_tree_filename)
         tasks.analyse_data(
             input_file,
-            path_cfg.get("data_output", s.DATA_FILENAME),
+            path_cfg.get("data_output", runtime_cfg.paths.data_filename),
             species,
             bool(run_cfg.get("skim", False)),
             draw,
             runtime_config=runtime_cfg,
         )
     elif task == "analyse_mc":
-        input_file = path_cfg.get("mc_tree", s.MC_TREE_FILENAME)
+        input_file = path_cfg.get("mc_tree", runtime_cfg.paths.mc_tree_filename)
         tasks.analyse_mc(
             input_file,
-            path_cfg.get("mc_output", s.MC_FILENAME),
+            path_cfg.get("mc_output", runtime_cfg.paths.mc_filename),
             species,
             bool(run_cfg.get("enable_trials", True)),
             draw,
@@ -157,27 +139,27 @@ def run(cfg: dict, user_cfg: dict | None = None) -> None:
         )
     elif task == "signal":
         tasks.signal(
-            path_cfg.get("data_input", s.DATA_FILENAME),
-            path_cfg.get("signal_output", s.SIGNAL_OUTPUT),
+            path_cfg.get("data_input", runtime_cfg.paths.data_filename),
+            path_cfg.get("signal_output", runtime_cfg.paths.signal_output),
             species,
             runtime_config=runtime_cfg,
         )
     elif task == "systematics":
         tasks.systematics(
-            path_cfg.get("signal_input", s.SIGNAL_OUTPUT),
-            path_cfg.get("mc_input", s.MC_FILENAME),
-            path_cfg.get("data_analysis_results", s.DATA_ANALYSIS_RESULTS),
-            path_cfg.get("systematics_output", s.SYSTEMATICS_OUTPUT),
+            path_cfg.get("signal_input", runtime_cfg.paths.signal_output),
+            path_cfg.get("mc_input", runtime_cfg.paths.mc_filename),
+            path_cfg.get("data_analysis_results", runtime_cfg.paths.data_analysis_results),
+            path_cfg.get("systematics_output", runtime_cfg.paths.systematics_output),
             species,
             runtime_config=runtime_cfg,
         )
     elif task == "checkpoint":
         tasks.checkpoint(
-            path_cfg.get("systematics_input", s.SYSTEMATICS_OUTPUT),
-            path_cfg.get("data_analysis_results", s.DATA_ANALYSIS_RESULTS),
-            path_cfg.get("mc_input", s.MC_FILENAME),
-            path_cfg.get("mc_analysis_results", s.MC_ANALYSIS_RESULTS),
-            path_cfg.get("signal_input", s.SIGNAL_OUTPUT),
+            path_cfg.get("systematics_input", runtime_cfg.paths.systematics_output),
+            path_cfg.get("data_analysis_results", runtime_cfg.paths.data_analysis_results),
+            path_cfg.get("mc_input", runtime_cfg.paths.mc_filename),
+            path_cfg.get("mc_analysis_results", runtime_cfg.paths.mc_analysis_results),
+            path_cfg.get("signal_input", runtime_cfg.paths.signal_output),
             path_cfg.get("checkpoint_output"),
             species,
             runtime_config=runtime_cfg,
@@ -185,12 +167,12 @@ def run(cfg: dict, user_cfg: dict | None = None) -> None:
     elif task == "report":
         from .reporting import generate_report
 
-        particle_profile = s.get_particle_config(species)
+        particle_profile = runtime_cfg.get_particle_config(species)
         report_index = generate_report(
-            report_dir=path_cfg.get("report_dir", f"{s.BASE_VARIANT_OUTPUT_DIR}report"),
-            signal_file_path=path_cfg.get("signal_input", s.SIGNAL_OUTPUT),
-            mc_file_path=path_cfg.get("mc_input", s.MC_FILENAME),
-            systematics_file_path=path_cfg.get("systematics_input", s.SYSTEMATICS_OUTPUT),
+            report_dir=path_cfg.get("report_dir", runtime_cfg.paths.species_stage_paths(species)["report_dir"]),
+            signal_file_path=path_cfg.get("signal_input", runtime_cfg.paths.signal_output),
+            mc_file_path=path_cfg.get("mc_input", runtime_cfg.paths.mc_filename),
+            systematics_file_path=path_cfg.get("systematics_input", runtime_cfg.paths.systematics_output),
             metadata_path=path_cfg.get("metadata_output", "run_metadata.json"),
             species=str(particle_profile["anti_name"]),
             sections=list(report_cfg.get("sections", [])),
@@ -198,18 +180,18 @@ def run(cfg: dict, user_cfg: dict | None = None) -> None:
             fit_tail=str(report_cfg.get("fit_tail", "single")),
             tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
             mc_hist_suffix=str(particle_profile.get("mc_hist_suffix", "He3")),
-            data_file_path=path_cfg.get("data_input", s.DATA_FILENAME),
+            data_file_path=path_cfg.get("data_input", runtime_cfg.paths.data_filename),
             runtime_config=runtime_cfg,
         )
         LOGGER.info("Report generated: %s", report_index)
     elif task == "full_chain":
-        data_out = path_cfg.get("data_output", s.DATA_FILENAME)
-        mc_out = path_cfg.get("mc_output", s.MC_FILENAME)
-        sig_out = path_cfg.get("signal_output", s.SIGNAL_OUTPUT)
-        syst_out = path_cfg.get("systematics_output", s.SYSTEMATICS_OUTPUT)
+        data_out = path_cfg.get("data_output", runtime_cfg.paths.data_filename)
+        mc_out = path_cfg.get("mc_output", runtime_cfg.paths.mc_filename)
+        sig_out = path_cfg.get("signal_output", runtime_cfg.paths.signal_output)
+        syst_out = path_cfg.get("systematics_output", runtime_cfg.paths.systematics_output)
 
         tasks.analyse_data(
-            path_cfg.get("data_tree", s.DATA_TREE_FILENAME),
+            path_cfg.get("data_tree", runtime_cfg.paths.data_tree_filename),
             data_out,
             species,
             bool(run_cfg.get("skim", False)),
@@ -217,7 +199,7 @@ def run(cfg: dict, user_cfg: dict | None = None) -> None:
             runtime_config=runtime_cfg,
         )
         tasks.analyse_mc(
-            path_cfg.get("mc_tree", s.MC_TREE_FILENAME),
+            path_cfg.get("mc_tree", runtime_cfg.paths.mc_tree_filename),
             mc_out,
             species,
             bool(run_cfg.get("enable_trials", True)),
@@ -228,7 +210,7 @@ def run(cfg: dict, user_cfg: dict | None = None) -> None:
         tasks.systematics(
             sig_out,
             mc_out,
-            path_cfg.get("data_analysis_results", s.DATA_ANALYSIS_RESULTS),
+            path_cfg.get("data_analysis_results", runtime_cfg.paths.data_analysis_results),
             syst_out,
             species,
             runtime_config=runtime_cfg,
@@ -237,9 +219,9 @@ def run(cfg: dict, user_cfg: dict | None = None) -> None:
         if "checkpoint_output" in user_paths and path_cfg.get("checkpoint_output"):
             tasks.checkpoint(
                 syst_out,
-                path_cfg.get("data_analysis_results", s.DATA_ANALYSIS_RESULTS),
+                path_cfg.get("data_analysis_results", runtime_cfg.paths.data_analysis_results),
                 mc_out,
-                path_cfg.get("mc_analysis_results", s.MC_ANALYSIS_RESULTS),
+                path_cfg.get("mc_analysis_results", runtime_cfg.paths.mc_analysis_results),
                 sig_out,
                 path_cfg.get("checkpoint_output"),
                 species,
@@ -248,9 +230,9 @@ def run(cfg: dict, user_cfg: dict | None = None) -> None:
 
         from .reporting import generate_report
 
-        particle_profile = s.get_particle_config(species)
+        particle_profile = runtime_cfg.get_particle_config(species)
         report_index = generate_report(
-            report_dir=path_cfg.get("report_dir", f"{s.BASE_VARIANT_OUTPUT_DIR}report"),
+            report_dir=path_cfg.get("report_dir", runtime_cfg.paths.species_stage_paths(species)["report_dir"]),
             signal_file_path=sig_out,
             mc_file_path=mc_out,
             systematics_file_path=syst_out,
@@ -283,11 +265,7 @@ def main() -> int:
     with open(args.config, "rb") as f:
         cfg = tomllib.load(f)
 
-    merged = default_config()
-    merged.update(cfg)
-    for section in ("common", "selections", "cuts", "run", "report", "particle", "paths"):
-        merged.setdefault(section, {})
-        merged[section].update(cfg.get(section, {}))
+    merged = s.merge_config(cfg)
 
     started = datetime.now(timezone.utc)
     status = "success"
@@ -313,14 +291,10 @@ def main() -> int:
             metadata_path = (cfg.get("paths", {}) if isinstance(cfg, dict) else {}).get("metadata_output")
             if not metadata_path:
                 try:
-                    particle_cfg = merged.get("particle", {})
-                    allowed_species = {
-                        str(key).strip().lower()
-                        for key, value in (particle_cfg.items() if isinstance(particle_cfg, dict) else [])
-                        if isinstance(value, dict)
-                    } or {"he3", "he4"}
+                    runtime_cfg = s.current_runtime_config(merged)
+                    allowed_species = set(runtime_cfg.particle_configs.keys()) or {"he3", "he4"}
                     species = _parse_species(merged.get("run", {}), allowed_species)
-                    metadata_path = _species_stage_paths(species)["metadata_output"]
+                    metadata_path = runtime_cfg.paths.species_stage_paths(species)["metadata_output"]
                 except Exception:
                     metadata_path = merged.get("paths", {}).get("metadata_output", "run_metadata.json")
             _write_metadata(metadata_path, metadata)
