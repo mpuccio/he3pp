@@ -256,29 +256,29 @@ def _book_mc_species(df_data: Any, particle: str, enable_trials: bool, tag: str 
             expr = f"{expr} && hasTOF"
         return expr
 
-    h_reco_tpc_a = [df_cut_reco.Filter(_reco_filter("!matter")).Histo1D(h1_model(f"TPCA{tpc_name}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
-    h_reco_tpc_m = [df_cut_reco.Filter(_reco_filter("matter")).Histo1D(h1_model(f"TPCM{tpc_name}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
-    h_reco_tof_a = [df_cut_reco.Filter(_reco_filter("!matter", with_tof=True)).Histo1D(h1_model(f"TOFA{tpc_name}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
-    h_reco_tof_m = [df_cut_reco.Filter(_reco_filter("matter", with_tof=True)).Histo1D(h1_model(f"TOFM{tpc_name}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
-    h_gen_a = [df_cut_gen.Filter("fPDGcode < 0").Histo1D(h1_model(f"genA{gen_name}{tag}", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt")]
-    h_gen_m = [df_cut_gen.Filter("fPDGcode > 0").Histo1D(h1_model(f"genM{gen_name}{tag}", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt")]
-
-    h_reco_tpc_a_w = [df_cut_reco.Filter(_reco_filter("!matter")).Histo1D(h1_model(f"TPCA{tpc_name}W{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
-    h_reco_tpc_m_w = [df_cut_reco.Filter(_reco_filter("matter")).Histo1D(h1_model(f"TPCM{tpc_name}W{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
-    h_reco_tof_a_w = [df_cut_reco.Filter(_reco_filter("!matter", with_tof=True)).Histo1D(h1_model(f"TOFA{tpc_name}W{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
-    h_reco_tof_m_w = [df_cut_reco.Filter(_reco_filter("matter", with_tof=True)).Histo1D(h1_model(f"TOFM{tpc_name}W{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
-    h_gen_a_w = [df_cut_gen.Filter("fPDGcode < 0").Histo1D(h1_model(f"genA{gen_name}W{tag}", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt", "ptWeight")]
-    h_gen_m_w = [df_cut_gen.Filter("fPDGcode > 0").Histo1D(h1_model(f"genM{gen_name}W{tag}", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt", "ptWeight")]
+    matter_defs = {
+        "A": {"matter_sel": "!matter", "pdg_sel": "fPDGcode < 0"},
+        "M": {"matter_sel": "matter", "pdg_sel": "fPDGcode > 0"},
+    }
+    h_reco_tpc: dict[str, list[Any]] = {}
+    h_reco_tof: dict[str, list[Any]] = {}
+    h_gen: dict[str, list[Any]] = {}
+    h_reco_tpc_w: dict[str, list[Any]] = {}
+    h_reco_tof_w: dict[str, list[Any]] = {}
+    h_gen_w: dict[str, list[Any]] = {}
+    for label, defs in matter_defs.items():
+        matter_sel = defs["matter_sel"]
+        pdg_sel = defs["pdg_sel"]
+        h_reco_tpc[label] = [df_cut_reco.Filter(_reco_filter(matter_sel)).Histo1D(h1_model(f"TPC{label}{tpc_name}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
+        h_reco_tof[label] = [df_cut_reco.Filter(_reco_filter(matter_sel, with_tof=True)).Histo1D(h1_model(f"TOF{label}{tpc_name}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
+        h_gen[label] = [df_cut_gen.Filter(pdg_sel).Histo1D(h1_model(f"gen{label}{gen_name}{tag}", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt")]
+        h_reco_tpc_w[label] = [df_cut_reco.Filter(_reco_filter(matter_sel)).Histo1D(h1_model(f"TPC{label}{tpc_name}W{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
+        h_reco_tof_w[label] = [df_cut_reco.Filter(_reco_filter(matter_sel, with_tof=True)).Histo1D(h1_model(f"TOF{label}{tpc_name}W{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
+        h_gen_w[label] = [df_cut_gen.Filter(pdg_sel).Histo1D(h1_model(f"gen{label}{gen_name}W{tag}", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt", "ptWeight")]
 
     reco_df_for_trials = df_cut_reco_base
 
     matter_map = {"A": "!matter", "M": "matter"}
-    h_gen = {"A": h_gen_a, "M": h_gen_m}
-    h_reco_tpc = {"A": h_reco_tpc_a, "M": h_reco_tpc_m}
-    h_reco_tof = {"A": h_reco_tof_a, "M": h_reco_tof_m}
-    h_gen_w = {"A": h_gen_a_w, "M": h_gen_m_w}
-    h_reco_tpc_w = {"A": h_reco_tpc_a_w, "M": h_reco_tpc_m_w}
-    h_reco_tof_w = {"A": h_reco_tof_a_w, "M": h_reco_tof_m_w}
 
     n_trials = 0
     if enable_trials and bool(p.get("trial_enabled", False)):
