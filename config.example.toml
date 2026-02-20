@@ -1,0 +1,78 @@
+[common]
+period = "LHC24"
+reco_pass = "apass1"
+mc_production = "LHC25b9"
+variant = "default"
+base_input_dir = "$NUCLEI_INPUT/"
+base_output_root = "$NUCLEI_OUTPUT/"
+filter_list_name = "nuclei"
+# Basenames used to derive canonical input paths from period/reco_pass/mc_production.
+data_tree_basename = "AO2D_skimmed.root"
+data_analysis_results_basename = "AnalysisResults_skimmed.root"
+mc_tree_basename = "AO2D_coalescence.root"
+mc_analysis_results_basename = "AnalysisResults.root"
+pt_bins = [1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0]
+cent_pt_limits = [7.0]
+tpc_max_pt = 7.0
+tof_min_pt = 1.0
+pt_range = [1.4, 7.0]
+tpc_function_names = ["GausGaus", "ExpGaus", "ExpTailGaus", "LognormalLognormal"]
+
+[selections.common]
+skim_template = "std::abs(nsigmaDCAz) < 8 && std::abs(fDCAxy) < 0.2 && std::abs({nsigma}) < 5"
+
+[selections.he3]
+base_rec = "fTPCnCls >= 110 && nITScls >= 5 && std::abs(fEta) < 0.9 && std::abs(fDCAxy) < 0.7 && pt > 0.8 && pt < 9.0"
+default_rec = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) < 7 && std::abs(fDCAxy) < 0.2"
+secondary_rec = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) > 7 && std::abs(fDCAxy) < 0.2"
+trial_dca = "std::abs(fDCAxy) < 0.2"
+nsigma_tof = 3.5
+mc_reco_append = "&& isPrimary"
+mc_gen = "isPrimary && std::abs(yMC) < 0.5"
+
+[selections.he4]
+base_rec = "fTPCnCls >= 110 && nITScls >= 5 && abs(fEta) < 0.9 && std::abs(fDCAxy) < 0.7 && ptHe4 > 0.5 && ptHe4 < 9.0"
+primary_rec = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) < 7 && std::abs(fDCAxy) < 0.2"
+secondary_rec = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) > 7 && std::abs(fDCAxy) < 0.2"
+nsigma_tof = 3.0
+mc_pid = "isHe4 && isPrimary"
+mc_reco = "nITScls > 4 && fTPCnCls > 110 && std::abs(fEta) < 0.9 && std::abs(rapidity) < 0.5"
+mc_gen = "std::abs(yMC) < 0.5"
+mc_signal_tracking = "fTPCnCls > 120 && nITScls >= 6 && std::abs(fDCAz) < 0.7"
+
+[cuts]
+nsigmaDCAz = [6.0, 7.0, 8.0]
+fTPCnCls = [110.0, 120.0, 130.0]
+nITScls = [5.0, 6.0, 7.0]
+nsigmaTPC = [3.0, 4.0, 5.0]
+
+[run]
+task = "analyse_data"      # analyse_data | analyse_mc | signal | systematics | checkpoint | report | full_chain
+species = ["he3", "he4"]   # choose one or many among: he3, he4
+enable_mt = true
+nthreads = 0                # 0 -> ROOT default
+enable_trials = true
+skim = false
+draw = false
+log_level = "INFO"          # DEBUG | INFO | WARNING | ERROR
+
+[report]
+# Section order and visibility for task=report/full_chain report generation.
+sections = ["signal_tof", "signal_tpc", "tof_tpc_2d", "efficiency", "pt_resolution", "corrected_spectrum"]
+# Pearson test threshold (fit is KO if p-value < fit_alpha).
+fit_alpha = 0.05
+# Tail mode for p-value: single | two
+fit_tail = "single"
+# TPC-only signal model shown in report and used in summary table.
+tpc_signal_model = "ExpGaus"
+
+[paths]
+# Optional overrides only.
+# All standard input/output locations are derived from [common] and species name.
+log_file = ""
+metadata_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/run_metadata.json"
+report_dir = "$NUCLEI_OUTPUT/LHC24/apass1/default/report"
+checkpoint_output = "$NUCLEI_OUTPUT/LHC24/apass1/default/checkpoint.root"
+
+# data_analysis_results is derived from [common] period/reco_pass (+ data_analysis_results_basename).
+mc_analysis_results = "$NUCLEI_INPUT/MC/LHC25b9/MChistos_new_final.root"

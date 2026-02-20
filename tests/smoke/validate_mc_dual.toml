@@ -1,0 +1,20 @@
+[run]
+task = "analyse_mc"
+species = ["he3", "he4"]
+enable_mt = true
+enable_trials = true
+draw = false
+
+[selections.he3]
+
+[selections.he4]
+
+[paths]
+input = "$NUCLEI_INPUT/MC/LHC25b9/AO2D_coalescence.root"
+metadata_output = "/tmp/he3pp_validation/mc_dual_run_metadata.json"
+
+[species.he3.paths]
+mc_output = "/tmp/he3pp_validation/MChistos_he3_py.root"
+
+[species.he4.paths]
+mc_output = "/tmp/he3pp_validation/MChistos_he4_py.root"
