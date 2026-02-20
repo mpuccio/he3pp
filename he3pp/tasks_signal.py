@@ -170,7 +170,6 @@ def signal(
                 i_name = f"d{i_c}_{i_b}"
                 dat = tof_h[i_s].ProjectionY(f"data{i_c}_{i_b}", i_b + 1, i_b + 1)
 
-                ptr(f_sig.mTau0).setVal(-0.3)
                 ptr(f_sig.mTau0).setVal(0.5)
 
                 d_out.cd(f"{species_names[i_s]}/GausExp/C_{i_c}")
