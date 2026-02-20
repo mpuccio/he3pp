@@ -59,8 +59,6 @@ log_level = "INFO"          # DEBUG | INFO | WARNING | ERROR
 [report]
 # Section order and visibility for task=report/full_chain report generation.
 sections = ["signal_tof", "signal_tpc", "tof_tpc_2d", "efficiency", "pt_resolution", "corrected_spectrum"]
-# Number of free fit parameters used when estimating NDF for chi2/ndf.
-fit_n_parameters = 6
 # Pearson test threshold (fit is KO if p-value < fit_alpha).
 fit_alpha = 0.05
 # Tail mode for p-value: single | two

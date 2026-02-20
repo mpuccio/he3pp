@@ -25,7 +25,19 @@ RooPlot* FitModule::FitData(TH1* dat,TString name, TString title, TString range,
   plot->SetTitle(title.Data());
   plot->SetName(name.Data());
   plot->GetYaxis()->SetTitle(Form("Counts / (%.2f Gev/#it{c}^{2})",plot->GetXaxis()->GetBinWidth(1)));
-  for (int i = 2; i--;) RooFitResult *res = mTemplate->fitTo(data,Extended(),Verbose(kFALSE),PrintEvalErrors(-1),PrintLevel(-1),Range(range));
+  RooFitResult* res = nullptr;
+  for (int i = 2; i--;) {
+    if (res) {
+      delete res;
+      res = nullptr;
+    }
+    res = mTemplate->fitTo(data,Save(true),Extended(),Verbose(kFALSE),PrintEvalErrors(-1),PrintLevel(-1),Range(range));
+  }
+  mNFloatPars = (res ? res->floatParsFinal().getSize() : 0);
+  if (res) {
+    delete res;
+    res = nullptr;
+  }
   if(change_range) plot->GetXaxis()->SetRangeUser(low_x,high_x);
   data.plotOn(plot,Name("data"),DrawOption("pz"));
   mTemplate->plotOn(plot,Name("model"),Range(plotrange),NormRange(range));

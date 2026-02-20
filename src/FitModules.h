@@ -51,6 +51,7 @@ public:
   std::unique_ptr<RooAbsPdf>  mSignal;
   std::unique_ptr<RooAbsPdf>  mBackground;
   float        mChi2;
+  int          mNFloatPars = 0;
 };
 
 class FitGausGaus : public FitModule {

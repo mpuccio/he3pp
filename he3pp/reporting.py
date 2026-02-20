@@ -266,8 +266,10 @@ def _normalize_sections(sections: list[str] | None) -> list[str]:
     return out or list(DEFAULT_SECTIONS)
 
 
-def _chi2_metrics(obj: Any, n_fit_parameters: int, fit_tail: str) -> dict[str, float]:
+def _chi2_metrics(obj: Any, fit_tail: str, n_fit_parameters: int | None) -> dict[str, float]:
     if not obj or obj.ClassName() != "RooPlot":
+        return {}
+    if n_fit_parameters is None:
         return {}
     try:
         chi2_ndf = float(obj.chiSquare("model", "data", int(n_fit_parameters)))
@@ -286,7 +288,32 @@ def _chi2_metrics(obj: Any, n_fit_parameters: int, fit_tail: str) -> dict[str, f
     chi2 = max(0.0, chi2_ndf * dof)
     p_right = float(ROOT.TMath.Prob(chi2, dof))
     p_value = min(1.0, 2.0 * min(p_right, 1.0 - p_right)) if fit_tail == "two" else p_right
-    return {"chi2_ndf": chi2_ndf, "dof": float(dof), "p_value": p_value}
+    return {"chi2_ndf": chi2_ndf, "dof": float(dof), "p_value": p_value, "n_fit_parameters": float(n_fit_parameters)}
+
+
+def _nfit_hist_path(section: str, species: str, tpc_signal_model: str) -> str | None:
+    letter = _species_letter(species)
+    if section == "signal_tof":
+        return f"nuclei/{species}/ChiSquare/hNFloatPars{letter}0"
+    if section == "signal_tpc":
+        return f"nuclei/{species}/TPConly/hNFloatParsTPC{letter}0_{tpc_signal_model}"
+    return None
+
+
+def _nfit_from_metadata(sig_file: ROOT.TFile, section: str, species: str, tpc_signal_model: str, bin_index: int | None) -> int | None:
+    if bin_index is None:
+        return None
+    path = _nfit_hist_path(section, species, tpc_signal_model)
+    if not path:
+        return None
+    h = _get(sig_file, path)
+    if not h or not h.ClassName().startswith("TH1"):
+        return None
+    ibin = int(bin_index) + 1
+    if ibin < 1 or ibin > int(h.GetNbinsX()):
+        return None
+    value = int(round(float(h.GetBinContent(ibin))))
+    return value if value > 0 else None
 
 
 def _status_from_metrics(available: bool, metrics: dict[str, float], alpha: float) -> tuple[str, str]:
@@ -416,7 +443,6 @@ def generate_report(
     metadata_path: str | None = None,
     species: str = "antihe3",
     sections: list[str] | None = None,
-    fit_n_parameters: int = 6,
     fit_alpha: float = 0.05,
     fit_tail: str = "single",
     tpc_signal_model: str = "ExpGaus",
@@ -499,7 +525,8 @@ def generate_report(
             )
         else:
             ok = _draw_to_png(obj, str(Path(report_dir) / it.output_png))
-        metrics = _chi2_metrics(obj, fit_n_parameters, fit_tail) if it.section in ("signal_tof", "signal_tpc") else {}
+        n_fit_parameters = _nfit_from_metadata(sig_file, it.section, species, tpc_signal_model, it.bin_index)
+        metrics = _chi2_metrics(obj, fit_tail, n_fit_parameters) if it.section in ("signal_tof", "signal_tpc") else {}
         if it.section in ("signal_tof", "signal_tpc"):
             status, status_class = _status_from_metrics(ok, metrics, fit_alpha)
         else:

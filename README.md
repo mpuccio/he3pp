@@ -73,7 +73,6 @@ Logging and metadata:
 Report controls:
 
 - `[report].sections`: ordered list of report sections to render
-- `[report].fit_n_parameters`: free-parameter count used for chi2 NDF estimate
 - `[report].fit_alpha`: Pearson threshold for signal-fit `OK/KO` labels
 - `[report].fit_tail`: `single` (default) or `two` for p-value computation
 - `[report].tpc_signal_model`: TPC-only model used for extraction plots + summary table

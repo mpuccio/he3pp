@@ -586,6 +586,8 @@ def signal(input_file: str, output_file: str) -> None:
         h_signif = [[None] * CENT_LENGTH for _ in range(2)]
         h_chi = [[None] * CENT_LENGTH for _ in range(2)]
         h_chi_tpc = [[None] * CENT_LENGTH for _ in range(2)]
+        h_npar = [[None] * CENT_LENGTH for _ in range(2)]
+        h_npar_tpc = [[[None] * NTPC_FUNCTIONS for _ in range(CENT_LENGTH)] for _ in range(2)]
         h_tpconly = [[[None] * NTPC_FUNCTIONS for _ in range(CENT_LENGTH)] for _ in range(2)]
         h_widen = [[None] * CENT_LENGTH for _ in range(2)]
         h_shift = [[None] * CENT_LENGTH for _ in range(2)]
@@ -613,9 +615,11 @@ def signal(input_file: str, output_file: str) -> None:
             i_c = 0
             for i_t in range(NTPC_FUNCTIONS):
                 h_tpconly[i_s][i_c][i_t] = ROOT.TH1D(f"hTPConly{LETTER[i_s]}{i_c}_{TPC_FUNCTION_NAMES[i_t]}", ";p_{T} GeV/c; TPC raw counts", n_pt_bins, pt_labels.GetArray())
+                h_npar_tpc[i_s][i_c][i_t] = ROOT.TH1D(f"hNFloatParsTPC{LETTER[i_s]}{i_c}_{TPC_FUNCTION_NAMES[i_t]}", "; p_{T}(GeV/c); N_{float} (TPC fit)", n_pt_bins, pt_labels.GetArray())
             h_signif[i_s][i_c] = ROOT.TH1D(f"hSignificance{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); #frac{S}{#sqrt{S+B}}", n_pt_bins, pt_labels.GetArray())
             h_chi[i_s][i_c] = ROOT.TH1D(f"hChiSquare{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); #chi^{2}/NDF", n_pt_bins, pt_labels.GetArray())
             h_chi_tpc[i_s][i_c] = ROOT.TH1D(f"hChiSquareTPC{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); #chi^{2}/NDF", n_pt_bins, pt_labels.GetArray())
+            h_npar[i_s][i_c] = ROOT.TH1D(f"hNFloatPars{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); N_{float} (TOF fit)", n_pt_bins, pt_labels.GetArray())
             h_raw[i_s][i_c] = ROOT.TH1D(f"hRawCounts{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); RawCounts", n_pt_bins, pt_labels.GetArray())
             h_raw_bc[i_s][i_c] = ROOT.TH1D(f"hRawCountsBinCounting{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); RawCounts", n_pt_bins, pt_labels.GetArray())
             h_sig[i_s][i_c] = ROOT.TH1D(f"hSignalGausExpGaus{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); RawCounts", n_pt_bins, pt_labels.GetArray())
@@ -646,6 +650,7 @@ def signal(input_file: str, output_file: str) -> None:
                 ptr(f_sig.mSigma).setConstant(False)
                 if center_pt > TOF_MIN_PT:
                     fit_plot.Write()
+                h_npar[i_s][i_c].SetBinContent(i_b + 1, float(getattr(f_sig, "mNFloatPars", 0)))
                 h_sig[i_s][i_c].SetBinContent(i_b + 1, ptr(f_sig.mSigCounts).getVal())
                 h_sig[i_s][i_c].SetBinError(i_b + 1, ptr(f_sig.mSigCounts).getError())
                 h_raw[i_s][i_c].SetBinContent(i_b + 1, ptr(f_sig.mSigCounts).getVal())
@@ -714,6 +719,7 @@ def signal(input_file: str, output_file: str) -> None:
                         tpc_plot = tpc_functions[i_t].FitData(tpc_dat, f"TPC_d_{i_c}_{i_b}_{TPC_FUNCTION_NAMES[i_t]}", i_title, fit_range, fit_range)
                         ptr(tpc_functions[i_t].mSigma).setConstant(False)
                         tpc_plot.Write()
+                        h_npar_tpc[i_s][i_c][i_t].SetBinContent(i_b + 1, float(getattr(tpc_functions[i_t], "mNFloatPars", 0)))
                         h_tpconly[i_s][i_c][i_t].SetBinContent(i_b + 1, ptr(tpc_functions[i_t].mSigCounts).getVal())
                         h_tpconly[i_s][i_c][i_t].SetBinError(i_b + 1, ptr(tpc_functions[i_t].mSigCounts).getError())
 
@@ -736,10 +742,12 @@ def signal(input_file: str, output_file: str) -> None:
             d_out.cd(f"{NAMES[i_s]}/TPConly")
             for i_t in range(NTPC_FUNCTIONS):
                 h_tpconly[i_s][i_c][i_t].Write()
+                h_npar_tpc[i_s][i_c][i_t].Write()
 
             d_out.cd(f"{NAMES[i_s]}/ChiSquare")
             h_chi[i_s][i_c].Write()
             h_chi_tpc[i_s][i_c].Write()
+            h_npar[i_s][i_c].Write()
 
     out_file.Close()
     LOGGER.info("signal done output=%s", output_file)
@@ -969,4 +977,3 @@ def checkpoint(systematics_file: str, data_ar_file: str, mc_file: str, mc_ar_fil
 
     out.Close()
     LOGGER.info("checkpoint done output=%s", output_file if output_file else "auto")
-
