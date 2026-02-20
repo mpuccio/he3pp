@@ -4,8 +4,6 @@ from typing import Any
 
 import ROOT
 
-from . import settings as s
-
 _DECLARED = False
 _FIT_LOADED = False
 
@@ -151,9 +149,17 @@ def define_columns_for_data(df: Any) -> Any:
     )
 
 
-def h2_model(name: str, title: str, y_bins: int, y_min: float, y_max: float) -> Any:
-    return ROOT.RDF.TH2DModel(name, title, s.N_PT_BINS, s.PT_BIN_ARRAY, y_bins, y_min, y_max)
+def h2_model(
+    name: str,
+    title: str,
+    y_bins: int,
+    y_min: float,
+    y_max: float,
+    n_pt_bins: int,
+    pt_bin_array: Any,
+) -> Any:
+    return ROOT.RDF.TH2DModel(name, title, int(n_pt_bins), pt_bin_array, y_bins, y_min, y_max)
 
 
-def h1_model(name: str, title: str) -> Any:
-    return ROOT.RDF.TH1DModel(name, title, s.N_PT_BINS, s.PT_BIN_ARRAY)
+def h1_model(name: str, title: str, n_pt_bins: int, pt_bin_array: Any) -> Any:
+    return ROOT.RDF.TH1DModel(name, title, int(n_pt_bins), pt_bin_array)

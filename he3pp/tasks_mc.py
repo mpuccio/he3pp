@@ -4,15 +4,16 @@ from typing import Any
 import ROOT
 
 from .root_io import build_rdf_from_ao2d, define_columns_for_data, ensure_parent, expand, h1_model, write_hist
-from .settings import *  # Loaded after runtime overrides in cli.run
+from .settings import RuntimeConfig
 from .tasks_common import collect_rresult_ptrs, run_graphs, weighted_eff_name
 
 
 LOGGER = logging.getLogger("he3pp.tasks")
 
 
-def _book_mc_species(df_data: Any, particle: str, enable_trials: bool, tag: str = "") -> dict[str, Any]:
-    p = get_particle_config(particle)
+def _book_mc_species(df_data: Any, particle: str, enable_trials: bool, runtime_config: RuntimeConfig, tag: str = "") -> dict[str, Any]:
+    cfg = runtime_config
+    p = cfg.get_particle_config(particle)
     pdg_abs = int(p["pdg_abs"])
     mass = float(p.get("mc_mass", p["mass"]))
     tpc_name = str(p["mc_hist_suffix"])
@@ -62,29 +63,29 @@ def _book_mc_species(df_data: Any, particle: str, enable_trials: bool, tag: str 
     for label, defs in matter_defs.items():
         matter_sel = defs["matter_sel"]
         pdg_sel = defs["pdg_sel"]
-        h_reco_tpc[label] = [df_cut_reco.Filter(_reco_filter(matter_sel)).Histo1D(h1_model(f"TPC{label}{tpc_name}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
-        h_reco_tof[label] = [df_cut_reco.Filter(_reco_filter(matter_sel, with_tof=True)).Histo1D(h1_model(f"TOF{label}{tpc_name}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt")]
-        h_gen[label] = [df_cut_gen.Filter(pdg_sel).Histo1D(h1_model(f"gen{label}{gen_name}{tag}", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt")]
-        h_reco_tpc_w[label] = [df_cut_reco.Filter(_reco_filter(matter_sel)).Histo1D(h1_model(f"TPC{label}{tpc_name}W{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
-        h_reco_tof_w[label] = [df_cut_reco.Filter(_reco_filter(matter_sel, with_tof=True)).Histo1D(h1_model(f"TOF{label}{tpc_name}W{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight")]
-        h_gen_w[label] = [df_cut_gen.Filter(pdg_sel).Histo1D(h1_model(f"gen{label}{gen_name}W{tag}", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts"), "fgPt", "ptWeight")]
+        h_reco_tpc[label] = [df_cut_reco.Filter(_reco_filter(matter_sel)).Histo1D(h1_model(f"TPC{label}{tpc_name}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", cfg.n_pt_bins, cfg.pt_bin_array), "pt")]
+        h_reco_tof[label] = [df_cut_reco.Filter(_reco_filter(matter_sel, with_tof=True)).Histo1D(h1_model(f"TOF{label}{tpc_name}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", cfg.n_pt_bins, cfg.pt_bin_array), "pt")]
+        h_gen[label] = [df_cut_gen.Filter(pdg_sel).Histo1D(h1_model(f"gen{label}{gen_name}{tag}", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts", cfg.n_pt_bins, cfg.pt_bin_array), "fgPt")]
+        h_reco_tpc_w[label] = [df_cut_reco.Filter(_reco_filter(matter_sel)).Histo1D(h1_model(f"TPC{label}{tpc_name}W{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", cfg.n_pt_bins, cfg.pt_bin_array), "pt", "ptWeight")]
+        h_reco_tof_w[label] = [df_cut_reco.Filter(_reco_filter(matter_sel, with_tof=True)).Histo1D(h1_model(f"TOF{label}{tpc_name}W{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", cfg.n_pt_bins, cfg.pt_bin_array), "pt", "ptWeight")]
+        h_gen_w[label] = [df_cut_gen.Filter(pdg_sel).Histo1D(h1_model(f"gen{label}{gen_name}W{tag}", ";#it{p}_{T}^{gen} (GeV/#it{c});Counts", cfg.n_pt_bins, cfg.pt_bin_array), "fgPt", "ptWeight")]
 
     reco_df_for_trials = df_cut_reco_base
     matter_map = {"A": "!matter", "M": "matter"}
 
     n_trials = 0
     if enable_trials and bool(p.get("trial_enabled", False)):
-        for cut_dca_z in CUT_NAMES["nsigmaDCAz"]:
+        for cut_dca_z in cfg.cut_names["nsigmaDCAz"]:
             d_dca = reco_df_for_trials.Filter(f"std::abs(nsigmaDCAz) < {cut_dca_z}")
-            for cut_tpc in CUT_NAMES["fTPCnCls"]:
+            for cut_tpc in cfg.cut_names["fTPCnCls"]:
                 d_tpc = d_dca.Filter(f"fTPCnCls > {cut_tpc}")
-                for cut_its in CUT_NAMES["nITScls"]:
+                for cut_its in cfg.cut_names["nITScls"]:
                     d_its = d_tpc.Filter(f"nITScls >= {cut_its}")
                     for label, matter_sel in matter_map.items():
-                        h_reco_tpc[label].append(d_its.Filter(matter_sel).Histo1D(h1_model(f"TPC{label}{tpc_name}{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt"))
-                        h_reco_tof[label].append(d_its.Filter(f"{matter_sel} && hasTOF").Histo1D(h1_model(f"TOF{label}{tpc_name}{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt"))
-                        h_reco_tpc_w[label].append(d_its.Filter(matter_sel).Histo1D(h1_model(f"TPC{label}{tpc_name}W{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight"))
-                        h_reco_tof_w[label].append(d_its.Filter(f"{matter_sel} && hasTOF").Histo1D(h1_model(f"TOF{label}{tpc_name}W{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight"))
+                        h_reco_tpc[label].append(d_its.Filter(matter_sel).Histo1D(h1_model(f"TPC{label}{tpc_name}{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", cfg.n_pt_bins, cfg.pt_bin_array), "pt"))
+                        h_reco_tof[label].append(d_its.Filter(f"{matter_sel} && hasTOF").Histo1D(h1_model(f"TOF{label}{tpc_name}{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", cfg.n_pt_bins, cfg.pt_bin_array), "pt"))
+                        h_reco_tpc_w[label].append(d_its.Filter(matter_sel).Histo1D(h1_model(f"TPC{label}{tpc_name}W{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", cfg.n_pt_bins, cfg.pt_bin_array), "pt", "ptWeight"))
+                        h_reco_tof_w[label].append(d_its.Filter(f"{matter_sel} && hasTOF").Histo1D(h1_model(f"TOF{label}{tpc_name}W{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts", cfg.n_pt_bins, cfg.pt_bin_array), "pt", "ptWeight"))
                     n_trials += 1
 
     actions = (
@@ -191,12 +192,21 @@ def _write_mc_bundle(bundle: dict[str, Any], output_file: str) -> None:
     out.Close()
 
 
-def analyse_mc(input_file: str, output_file: str, particle: str, enable_trials: bool, draw: bool = False) -> None:
+def analyse_mc(
+    input_file: str,
+    output_file: str,
+    particle: str,
+    enable_trials: bool,
+    draw: bool = False,
+    *,
+    runtime_config: RuntimeConfig,
+) -> None:
+    cfg = runtime_config
     LOGGER.info("analyse_mc start particle=%s input=%s output=%s", particle, input_file, output_file)
     ROOT.gStyle.SetOptStat(0)
     rdf = build_rdf_from_ao2d("O2nucleitablemc", input_file)
     df_data = define_columns_for_data(rdf)
-    bundle = _book_mc_species(df_data, particle, enable_trials, tag=f"_{particle}")
+    bundle = _book_mc_species(df_data, particle, enable_trials, cfg, tag=f"_{particle}")
     run_graphs(bundle["actions"])
     if draw:
         _draw_mc_eff(bundle, f"effMatterAntiMatter_{particle}")

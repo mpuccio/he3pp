@@ -4,15 +4,22 @@ import logging
 import ROOT
 
 from .root_io import ensure_parent, expand, load_fit_modules, ptr
-from .settings import *  # Loaded after runtime overrides in cli.run
+from .settings import RuntimeConfig
 
 
 LOGGER = logging.getLogger("he3pp.tasks")
 
 
-def signal(input_file: str, output_file: str, particle: str = "he3") -> None:
+def signal(
+    input_file: str,
+    output_file: str,
+    particle: str = "he3",
+    *,
+    runtime_config: RuntimeConfig,
+) -> None:
+    cfg = runtime_config
     LOGGER.info("signal start particle=%s input=%s output=%s", particle, input_file, output_file)
-    p = get_particle_config(particle)
+    p = cfg.get_particle_config(particle)
     species_names = [str(p["name"]), str(p["anti_name"])]
     matter_label = str(p["label_matter"])
     load_fit_modules()
@@ -73,7 +80,7 @@ def signal(input_file: str, output_file: str, particle: str = "he3") -> None:
     ptr(f_lnl.mMu).setRange(-0.5, 0.5)
 
     tpc_functions = [f_gg, f_eg, f_etg, f_lnl]
-    tpc_model_names = [str(name) for name in TPC_FUNCTION_NAMES]
+    tpc_model_names = [str(name) for name in cfg.tpc_function_names]
     if len(tpc_model_names) > len(tpc_functions):
         raise RuntimeError(
             f"Configured {len(tpc_model_names)} TPC function names but only {len(tpc_functions)} fit functions are available."
@@ -82,7 +89,7 @@ def signal(input_file: str, output_file: str, particle: str = "he3") -> None:
 
     for key in in_file.GetListOfKeys():
         key_name = key.GetName()
-        if FILTER_LIST_NAME not in key_name:
+        if cfg.filter_list_name not in key_name:
             continue
         d_in = in_file.Get(key_name)
         d_out = out_file.mkdir(key_name)
@@ -100,19 +107,19 @@ def signal(input_file: str, output_file: str, particle: str = "he3") -> None:
         tof_h = [f_m_tof, f_a_tof]
         tpc_h = [f_m_tpc, f_a_tpc]
 
-        h_raw = [[None] * CENT_LENGTH for _ in range(2)]
-        h_raw_bc = [[None] * CENT_LENGTH for _ in range(2)]
-        h_sig = [[None] * CENT_LENGTH for _ in range(2)]
-        h_signif = [[None] * CENT_LENGTH for _ in range(2)]
-        h_chi = [[None] * CENT_LENGTH for _ in range(2)]
-        h_chi_tpc = [[None] * CENT_LENGTH for _ in range(2)]
-        h_npar = [[None] * CENT_LENGTH for _ in range(2)]
-        h_npar_tpc = [[[None] * n_tpc_functions for _ in range(CENT_LENGTH)] for _ in range(2)]
-        h_tpconly = [[[None] * n_tpc_functions for _ in range(CENT_LENGTH)] for _ in range(2)]
-        h_widen = [[None] * CENT_LENGTH for _ in range(2)]
-        h_shift = [[None] * CENT_LENGTH for _ in range(2)]
-        h_widen_tpc = [[None] * CENT_LENGTH for _ in range(2)]
-        h_shift_tpc = [[None] * CENT_LENGTH for _ in range(2)]
+        h_raw = [[None] * cfg.cent_length for _ in range(2)]
+        h_raw_bc = [[None] * cfg.cent_length for _ in range(2)]
+        h_sig = [[None] * cfg.cent_length for _ in range(2)]
+        h_signif = [[None] * cfg.cent_length for _ in range(2)]
+        h_chi = [[None] * cfg.cent_length for _ in range(2)]
+        h_chi_tpc = [[None] * cfg.cent_length for _ in range(2)]
+        h_npar = [[None] * cfg.cent_length for _ in range(2)]
+        h_npar_tpc = [[[None] * n_tpc_functions for _ in range(cfg.cent_length)] for _ in range(2)]
+        h_tpconly = [[[None] * n_tpc_functions for _ in range(cfg.cent_length)] for _ in range(2)]
+        h_widen = [[None] * cfg.cent_length for _ in range(2)]
+        h_shift = [[None] * cfg.cent_length for _ in range(2)]
+        h_widen_tpc = [[None] * cfg.cent_length for _ in range(2)]
+        h_shift_tpc = [[None] * cfg.cent_length for _ in range(2)]
 
         n_sigma_vec = [3.0]
         v_shift = []
@@ -121,10 +128,10 @@ def signal(input_file: str, output_file: str, particle: str = "he3") -> None:
             d_species = d_out.mkdir(species_names[i_s])
             d_species.cd()
             d_sig = d_species.mkdir("GausExp")
-            for i_c in range(CENT_LENGTH):
+            for i_c in range(cfg.cent_length):
                 d_sig.mkdir(f"C_{i_c}")
             d_side = d_species.mkdir("Sidebands")
-            for i_c in range(CENT_LENGTH):
+            for i_c in range(cfg.cent_length):
                 d_side.mkdir(f"C_{i_c}")
             d_species.mkdir("Significance")
             d_species.mkdir("Systematic")
@@ -134,28 +141,28 @@ def signal(input_file: str, output_file: str, particle: str = "he3") -> None:
         for i_s in range(2):
             i_c = 0
             for i_t, model_name in enumerate(tpc_model_names):
-                h_tpconly[i_s][i_c][i_t] = ROOT.TH1D(f"hTPConly{LETTER[i_s]}{i_c}_{model_name}", ";p_{T} GeV/c; TPC raw counts", n_pt_bins, pt_labels.GetArray())
-                h_npar_tpc[i_s][i_c][i_t] = ROOT.TH1D(f"hNFloatParsTPC{LETTER[i_s]}{i_c}_{model_name}", "; p_{T}(GeV/c); N_{float} (TPC fit)", n_pt_bins, pt_labels.GetArray())
-            h_signif[i_s][i_c] = ROOT.TH1D(f"hSignificance{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); #frac{S}{#sqrt{S+B}}", n_pt_bins, pt_labels.GetArray())
-            h_chi[i_s][i_c] = ROOT.TH1D(f"hChiSquare{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); #chi^{2}/NDF", n_pt_bins, pt_labels.GetArray())
-            h_chi_tpc[i_s][i_c] = ROOT.TH1D(f"hChiSquareTPC{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); #chi^{2}/NDF", n_pt_bins, pt_labels.GetArray())
-            h_npar[i_s][i_c] = ROOT.TH1D(f"hNFloatPars{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); N_{float} (TOF fit)", n_pt_bins, pt_labels.GetArray())
-            h_raw[i_s][i_c] = ROOT.TH1D(f"hRawCounts{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); RawCounts", n_pt_bins, pt_labels.GetArray())
-            h_raw_bc[i_s][i_c] = ROOT.TH1D(f"hRawCountsBinCounting{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); RawCounts", n_pt_bins, pt_labels.GetArray())
-            h_sig[i_s][i_c] = ROOT.TH1D(f"hSignalGausExpGaus{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); RawCounts", n_pt_bins, pt_labels.GetArray())
-            h_widen[i_s][i_c] = ROOT.TH1D(f"hWidenRangeSyst{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); RMS", n_pt_bins, pt_labels.GetArray())
-            h_shift[i_s][i_c] = ROOT.TH1D(f"hShiftRangeSyst{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); RMS", n_pt_bins, pt_labels.GetArray())
-            h_widen_tpc[i_s][i_c] = ROOT.TH1D(f"hWidenRangeSystTPC{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); RMS", n_pt_bins, pt_labels.GetArray())
-            h_shift_tpc[i_s][i_c] = ROOT.TH1D(f"hShiftRangeSystTPC{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); RMS", n_pt_bins, pt_labels.GetArray())
+                h_tpconly[i_s][i_c][i_t] = ROOT.TH1D(f"hTPConly{cfg.letter[i_s]}{i_c}_{model_name}", ";p_{T} GeV/c; TPC raw counts", n_pt_bins, pt_labels.GetArray())
+                h_npar_tpc[i_s][i_c][i_t] = ROOT.TH1D(f"hNFloatParsTPC{cfg.letter[i_s]}{i_c}_{model_name}", "; p_{T}(GeV/c); N_{float} (TPC fit)", n_pt_bins, pt_labels.GetArray())
+            h_signif[i_s][i_c] = ROOT.TH1D(f"hSignificance{cfg.letter[i_s]}{i_c}", "; p_{T}(GeV/c); #frac{S}{#sqrt{S+B}}", n_pt_bins, pt_labels.GetArray())
+            h_chi[i_s][i_c] = ROOT.TH1D(f"hChiSquare{cfg.letter[i_s]}{i_c}", "; p_{T}(GeV/c); #chi^{2}/NDF", n_pt_bins, pt_labels.GetArray())
+            h_chi_tpc[i_s][i_c] = ROOT.TH1D(f"hChiSquareTPC{cfg.letter[i_s]}{i_c}", "; p_{T}(GeV/c); #chi^{2}/NDF", n_pt_bins, pt_labels.GetArray())
+            h_npar[i_s][i_c] = ROOT.TH1D(f"hNFloatPars{cfg.letter[i_s]}{i_c}", "; p_{T}(GeV/c); N_{float} (TOF fit)", n_pt_bins, pt_labels.GetArray())
+            h_raw[i_s][i_c] = ROOT.TH1D(f"hRawCounts{cfg.letter[i_s]}{i_c}", "; p_{T}(GeV/c); RawCounts", n_pt_bins, pt_labels.GetArray())
+            h_raw_bc[i_s][i_c] = ROOT.TH1D(f"hRawCountsBinCounting{cfg.letter[i_s]}{i_c}", "; p_{T}(GeV/c); RawCounts", n_pt_bins, pt_labels.GetArray())
+            h_sig[i_s][i_c] = ROOT.TH1D(f"hSignalGausExpGaus{cfg.letter[i_s]}{i_c}", "; p_{T}(GeV/c); RawCounts", n_pt_bins, pt_labels.GetArray())
+            h_widen[i_s][i_c] = ROOT.TH1D(f"hWidenRangeSyst{cfg.letter[i_s]}{i_c}", "; p_{T}(GeV/c); RMS", n_pt_bins, pt_labels.GetArray())
+            h_shift[i_s][i_c] = ROOT.TH1D(f"hShiftRangeSyst{cfg.letter[i_s]}{i_c}", "; p_{T}(GeV/c); RMS", n_pt_bins, pt_labels.GetArray())
+            h_widen_tpc[i_s][i_c] = ROOT.TH1D(f"hWidenRangeSystTPC{cfg.letter[i_s]}{i_c}", "; p_{T}(GeV/c); RMS", n_pt_bins, pt_labels.GetArray())
+            h_shift_tpc[i_s][i_c] = ROOT.TH1D(f"hShiftRangeSystTPC{cfg.letter[i_s]}{i_c}", "; p_{T}(GeV/c); RMS", n_pt_bins, pt_labels.GetArray())
 
         for i_b in range(n_pt_bins):
             center_pt = pt_axis.GetBinCenter(i_b + 1)
-            if center_pt < PT_RANGE[0] or center_pt > PT_RANGE[1]:
+            if center_pt < cfg.pt_range[0] or center_pt > cfg.pt_range[1]:
                 continue
 
             for i_s in range(2):
                 i_c = 0
-                if center_pt > CENT_PT_LIMITS[i_c]:
+                if center_pt > cfg.cent_pt_limits[i_c]:
                     continue
 
                 i_title = f"{pt_labels[i_b]:1.1f} #leq #it{{p}}_{{T}} < {pt_labels[i_b + 1]:1.1f} GeV/#it{{c}}"
@@ -168,7 +175,7 @@ def signal(input_file: str, output_file: str, particle: str = "he3") -> None:
                 d_out.cd(f"{species_names[i_s]}/GausExp/C_{i_c}")
                 fit_plot = f_sig.FitData(dat, i_name, i_title, "Full", "Full", False, -1.2, 1.5)
                 ptr(f_sig.mSigma).setConstant(False)
-                if center_pt > TOF_MIN_PT:
+                if center_pt > cfg.tof_min_pt:
                     fit_plot.Write()
                 h_npar[i_s][i_c].SetBinContent(i_b + 1, float(getattr(f_sig, "mNFloatPars", 0)))
                 h_sig[i_s][i_c].SetBinContent(i_b + 1, ptr(f_sig.mSigCounts).getVal())
@@ -231,7 +238,7 @@ def signal(input_file: str, output_file: str, particle: str = "he3") -> None:
                 if shift_vec and raw_val > 0:
                     h_shift[i_s][i_c].SetBinContent(i_b + 1, ROOT.TMath.RMS(len(shift_vec), array("d", shift_vec)) / raw_val)
 
-                if center_pt < TPC_MAX_PT:
+                if center_pt < cfg.tpc_max_pt:
                     d_out.cd(f"{species_names[i_s]}/TPConly")
                     tpc_dat = tpc_h[i_s].ProjectionY(f"tpc_data{i_c}_{i_b}", i_b + 1, i_b + 1)
                     for i_t, model_name in enumerate(tpc_model_names):

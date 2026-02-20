@@ -2,11 +2,11 @@ from typing import Any
 
 import ROOT
 
-from .settings import TPC_FUNCTION_NAMES
+from .settings import RuntimeConfig
 
 
-def default_tpc_model_name() -> str:
-    return "ExpGaus" if "ExpGaus" in TPC_FUNCTION_NAMES else str(TPC_FUNCTION_NAMES[0])
+def default_tpc_model_name(runtime_config: RuntimeConfig) -> str:
+    return "ExpGaus" if "ExpGaus" in runtime_config.tpc_function_names else str(runtime_config.tpc_function_names[0])
 
 
 def weighted_eff_name(base: str) -> str:

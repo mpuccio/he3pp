@@ -10,7 +10,7 @@ from typing import Any
 
 import ROOT
 
-from . import settings as s
+from .settings import RuntimeConfig
 from .root_io import expand
 
 
@@ -461,7 +461,10 @@ def generate_report(
     tpc_signal_model: str = "ExpGaus",
     mc_hist_suffix: str = "He3",
     data_file_path: str | None = None,
+    *,
+    runtime_config: RuntimeConfig,
 ) -> str:
+    cfg = runtime_config
     report_dir = expand(report_dir)
     _mkdir(str(Path(report_dir) / "assets"))
     ROOT.gStyle.SetOptStat(0)
@@ -606,7 +609,7 @@ img { width:100%; border-radius:10px; border:1px solid #d6dddc; background:#ffff
         h.write(style)
         h.write("</head><body><main class='wrap'>")
         h.write("<h1>He3pp Analysis Report</h1>")
-        h.write(f"<p class='meta'><b>Variant:</b> {html.escape(s.VARIANT)} | <b>Species:</b> {html.escape(species)}</p>")
+        h.write(f"<p class='meta'><b>Variant:</b> {html.escape(cfg.variant)} | <b>Species:</b> {html.escape(species)}</p>")
         nav_items: list[str] = ["<a href='#section-fit-and-efficiency-summary'>Summary</a>"]
         for sec in section_order:
             title, _subtitle = SECTION_DEFS.get(sec, (sec, ""))
@@ -636,7 +639,10 @@ def generate_dual_report_index(
     report_dir: str,
     entries: list[dict[str, str]],
     metadata_path: str | None = None,
+    *,
+    runtime_config: RuntimeConfig,
 ) -> str:
+    cfg = runtime_config
     report_dir = expand(report_dir)
     _mkdir(report_dir)
     meta = {}
@@ -681,7 +687,7 @@ pre { white-space:pre-wrap; margin:10px 0 0; }
         h.write(style)
         h.write("</head><body><main class='wrap'>")
         h.write("<h1>He3pp Dual Report</h1>")
-        h.write(f"<p class='meta'><b>Variant:</b> {html.escape(s.VARIANT)} | <b>Species reports:</b> {len(entries)}</p>")
+        h.write(f"<p class='meta'><b>Variant:</b> {html.escape(cfg.variant)} | <b>Species reports:</b> {len(entries)}</p>")
         h.write(f"<section class='grid'>{''.join(cards)}</section>")
         if meta:
             h.write("<details><summary><b>Run Metadata</b></summary><pre>")

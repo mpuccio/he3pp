@@ -32,6 +32,9 @@ export DATA_INPUT_FILE
 python3 - <<'PY'
 import os
 from he3pp import tasks
+from he3pp.settings import current_runtime_config
+
+cfg = current_runtime_config()
 
 tasks.analyse_data(
     os.environ["DATA_INPUT_FILE"],
@@ -39,6 +42,7 @@ tasks.analyse_data(
     "he3",
     skim=False,
     draw=False,
+    runtime_config=cfg,
 )
 PY
 cp /tmp/he3pp_validation/DataHistos_he3_py.root "$REF_ROOT/DataHistos_he3_ref.root"
@@ -46,6 +50,9 @@ cp /tmp/he3pp_validation/DataHistos_he3_py.root "$REF_ROOT/DataHistos_he3_ref.ro
 python3 - <<'PY'
 import os
 from he3pp import tasks
+from he3pp.settings import current_runtime_config
+
+cfg = current_runtime_config()
 
 tasks.analyse_mc(
     os.path.expandvars("$NUCLEI_INPUT/MC/LHC25b9/AO2D_coalescence.root"),
@@ -53,6 +60,7 @@ tasks.analyse_mc(
     "he3",
     enable_trials=True,
     draw=False,
+    runtime_config=cfg,
 )
 PY
 cp /tmp/he3pp_validation/MChistos_he3_py.root "$REF_ROOT/MChistos_he3_ref.root"

@@ -4,16 +4,27 @@ import logging
 import ROOT
 
 from .root_io import ensure_parent, expand
-from .settings import *  # Loaded after runtime overrides in cli.run
+from .settings import RuntimeConfig
 from .tasks_common import default_tpc_model_name
 
 
 LOGGER = logging.getLogger("he3pp.tasks")
 
 
-def checkpoint(systematics_file: str, data_ar_file: str, mc_file: str, mc_ar_file: str, signal_file: str, output_file: str | None = None, particle: str = "he3") -> None:
+def checkpoint(
+    systematics_file: str,
+    data_ar_file: str,
+    mc_file: str,
+    mc_ar_file: str,
+    signal_file: str,
+    output_file: str | None = None,
+    particle: str = "he3",
+    *,
+    runtime_config: RuntimeConfig,
+) -> None:
+    cfg = runtime_config
     LOGGER.info("checkpoint start particle=%s output=%s", particle, output_file if output_file else "auto")
-    p = get_particle_config(particle)
+    p = cfg.get_particle_config(particle)
     anti_name = str(p["anti_name"])
     hist_suffix = str(p["mc_hist_suffix"])
     syst = ROOT.TFile(expand(systematics_file))
@@ -49,12 +60,12 @@ def checkpoint(systematics_file: str, data_ar_file: str, mc_file: str, mc_ar_fil
     out.mkdir("Data")
     out.cd("Data")
     data_ar.Get("nuclei-spectra/spectra/hRecVtxZData").Clone("events_reconstructed").Write()
-    chosen_tpc_model_name = default_tpc_model_name()
+    chosen_tpc_model_name = default_tpc_model_name(cfg)
     tpc_raw = sig.Get(f"nuclei/{anti_name}/TPConly/hTPConlyA0_{chosen_tpc_model_name}")
     if not tpc_raw:
         raise RuntimeError(
             f"Missing checkpoint TPC raw counts for model '{chosen_tpc_model_name}'. "
-            f"Available configured models: {', '.join(TPC_FUNCTION_NAMES)}."
+            f"Available configured models: {', '.join(cfg.tpc_function_names)}."
         )
     tpc_raw.Clone("tpc_rawcounts").Write()
     sig.Get(f"nuclei/{anti_name}/GausExp/hRawCountsA0").Clone("tof_rawcounts").Write()

@@ -1,5 +1,6 @@
 from array import array
 import copy
+from dataclasses import dataclass
 from typing import Any
 
 LETTER = ["M", "A"]
@@ -258,6 +259,52 @@ def get_particle_config(species: str) -> dict[str, Any]:
     if species not in PARTICLE_CONFIGS:
         raise ValueError(f"Unsupported species '{species}'. Available: {', '.join(sorted(PARTICLE_CONFIGS))}.")
     return copy.deepcopy(PARTICLE_CONFIGS[species])
+
+
+@dataclass
+class RuntimeConfig:
+    variant: str
+    letter: list[str]
+    filter_list_name: str
+    n_pt_bins: int
+    pt_bins: list[float]
+    pt_bin_array: array
+    cent_length: int
+    cent_pt_limits: list[float]
+    tpc_max_pt: float
+    tof_min_pt: float
+    pt_range: list[float]
+    tpc_function_names: list[str]
+    cut_names: dict[str, list[float]]
+    skim_selection_template: str
+    particle_configs: dict[str, dict[str, Any]]
+
+    def get_particle_config(self, species: str) -> dict[str, Any]:
+        if species not in self.particle_configs:
+            raise ValueError(
+                f"Unsupported species '{species}'. Available: {', '.join(sorted(self.particle_configs))}."
+            )
+        return copy.deepcopy(self.particle_configs[species])
+
+
+def current_runtime_config() -> RuntimeConfig:
+    return RuntimeConfig(
+        variant=str(VARIANT),
+        letter=copy.deepcopy(LETTER),
+        filter_list_name=str(FILTER_LIST_NAME),
+        n_pt_bins=int(N_PT_BINS),
+        pt_bins=copy.deepcopy(PT_BINS),
+        pt_bin_array=array("d", PT_BIN_ARRAY),
+        cent_length=int(CENT_LENGTH),
+        cent_pt_limits=copy.deepcopy(CENT_PT_LIMITS),
+        tpc_max_pt=float(TPC_MAX_PT),
+        tof_min_pt=float(TOF_MIN_PT),
+        pt_range=copy.deepcopy(PT_RANGE),
+        tpc_function_names=copy.deepcopy(TPC_FUNCTION_NAMES),
+        cut_names=copy.deepcopy(CUT_NAMES),
+        skim_selection_template=str(SKIM_SELECTION_TEMPLATE),
+        particle_configs=copy.deepcopy(PARTICLE_CONFIGS),
+    )
 
 
 recompute_derived_globals()

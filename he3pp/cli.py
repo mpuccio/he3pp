@@ -175,6 +175,7 @@ def run(cfg: dict, user_cfg: dict | None = None) -> None:
     LOGGER.info("Starting run task=%s species=%s", run_cfg.get("task", "analyse_data"), species)
 
     s.apply_runtime_overrides(cfg)
+    runtime_cfg = s.current_runtime_config()
     from . import tasks  # lazy import so tasks bind runtime-overridden settings
 
     user_paths = (user_cfg or {}).get("paths", {})
@@ -201,12 +202,31 @@ def run(cfg: dict, user_cfg: dict | None = None) -> None:
     t0 = time.time()
     if task == "analyse_data":
         input_file = path_cfg.get("data_tree", s.DATA_TREE_FILENAME)
-        tasks.analyse_data(input_file, path_cfg.get("data_output", s.DATA_FILENAME), species, bool(run_cfg.get("skim", False)), draw)
+        tasks.analyse_data(
+            input_file,
+            path_cfg.get("data_output", s.DATA_FILENAME),
+            species,
+            bool(run_cfg.get("skim", False)),
+            draw,
+            runtime_config=runtime_cfg,
+        )
     elif task == "analyse_mc":
         input_file = path_cfg.get("mc_tree", s.MC_TREE_FILENAME)
-        tasks.analyse_mc(input_file, path_cfg.get("mc_output", s.MC_FILENAME), species, bool(run_cfg.get("enable_trials", True)), draw)
+        tasks.analyse_mc(
+            input_file,
+            path_cfg.get("mc_output", s.MC_FILENAME),
+            species,
+            bool(run_cfg.get("enable_trials", True)),
+            draw,
+            runtime_config=runtime_cfg,
+        )
     elif task == "signal":
-        tasks.signal(path_cfg.get("data_input", s.DATA_FILENAME), path_cfg.get("signal_output", s.SIGNAL_OUTPUT), species)
+        tasks.signal(
+            path_cfg.get("data_input", s.DATA_FILENAME),
+            path_cfg.get("signal_output", s.SIGNAL_OUTPUT),
+            species,
+            runtime_config=runtime_cfg,
+        )
     elif task == "systematics":
         tasks.systematics(
             path_cfg.get("signal_input", s.SIGNAL_OUTPUT),
@@ -214,6 +234,7 @@ def run(cfg: dict, user_cfg: dict | None = None) -> None:
             path_cfg.get("data_analysis_results", s.DATA_ANALYSIS_RESULTS),
             path_cfg.get("systematics_output", s.SYSTEMATICS_OUTPUT),
             species,
+            runtime_config=runtime_cfg,
         )
     elif task == "checkpoint":
         tasks.checkpoint(
@@ -224,6 +245,7 @@ def run(cfg: dict, user_cfg: dict | None = None) -> None:
             path_cfg.get("signal_input", s.SIGNAL_OUTPUT),
             path_cfg.get("checkpoint_output"),
             species,
+            runtime_config=runtime_cfg,
         )
     elif task == "report":
         from .reporting import generate_report
@@ -242,6 +264,7 @@ def run(cfg: dict, user_cfg: dict | None = None) -> None:
             tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
             mc_hist_suffix=str(particle_profile.get("mc_hist_suffix", "He3")),
             data_file_path=path_cfg.get("data_input", s.DATA_FILENAME),
+            runtime_config=runtime_cfg,
         )
         LOGGER.info("Report generated: %s", report_index)
     elif task == "full_chain":
@@ -250,10 +273,31 @@ def run(cfg: dict, user_cfg: dict | None = None) -> None:
         sig_out = path_cfg.get("signal_output", s.SIGNAL_OUTPUT)
         syst_out = path_cfg.get("systematics_output", s.SYSTEMATICS_OUTPUT)
 
-        tasks.analyse_data(path_cfg.get("data_tree", s.DATA_TREE_FILENAME), data_out, species, bool(run_cfg.get("skim", False)), draw)
-        tasks.analyse_mc(path_cfg.get("mc_tree", s.MC_TREE_FILENAME), mc_out, species, bool(run_cfg.get("enable_trials", True)), draw)
-        tasks.signal(data_out, sig_out, species)
-        tasks.systematics(sig_out, mc_out, path_cfg.get("data_analysis_results", s.DATA_ANALYSIS_RESULTS), syst_out, species)
+        tasks.analyse_data(
+            path_cfg.get("data_tree", s.DATA_TREE_FILENAME),
+            data_out,
+            species,
+            bool(run_cfg.get("skim", False)),
+            draw,
+            runtime_config=runtime_cfg,
+        )
+        tasks.analyse_mc(
+            path_cfg.get("mc_tree", s.MC_TREE_FILENAME),
+            mc_out,
+            species,
+            bool(run_cfg.get("enable_trials", True)),
+            draw,
+            runtime_config=runtime_cfg,
+        )
+        tasks.signal(data_out, sig_out, species, runtime_config=runtime_cfg)
+        tasks.systematics(
+            sig_out,
+            mc_out,
+            path_cfg.get("data_analysis_results", s.DATA_ANALYSIS_RESULTS),
+            syst_out,
+            species,
+            runtime_config=runtime_cfg,
+        )
 
         if "checkpoint_output" in user_paths and path_cfg.get("checkpoint_output"):
             tasks.checkpoint(
@@ -264,6 +308,7 @@ def run(cfg: dict, user_cfg: dict | None = None) -> None:
                 sig_out,
                 path_cfg.get("checkpoint_output"),
                 species,
+                runtime_config=runtime_cfg,
             )
 
         from .reporting import generate_report
@@ -282,6 +327,7 @@ def run(cfg: dict, user_cfg: dict | None = None) -> None:
             tpc_signal_model=str(report_cfg.get("tpc_signal_model", "ExpGaus")),
             mc_hist_suffix=str(particle_profile.get("mc_hist_suffix", "He3")),
             data_file_path=data_out,
+            runtime_config=runtime_cfg,
         )
         LOGGER.info("Report generated: %s", report_index)
     else:
