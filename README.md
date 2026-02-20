@@ -6,7 +6,9 @@ Unified, config-driven PyROOT workflow for anti-He3/anti-He4 analysis.
 
 - `he3_cli.py`: thin entrypoint.
 - `he3pp/cli.py`: config loading + task dispatch.
-- `he3pp/settings.py`: defaults and runtime overrides from TOML.
+- `he3pp/defaults_he3.toml`: canonical default configuration for He3.
+- `he3pp/defaults_he4.toml`: canonical default configuration for He4.
+- `he3pp/settings.py`: runtime settings/state loaded from species defaults + user TOML overrides.
 - `he3pp/root_io.py`: ROOT/PyROOT helpers and column definitions.
 - `he3pp/tasks.py`: analysis tasks.
 - `config.example.toml`: full config template.
@@ -42,8 +44,8 @@ python3 -c 'import ROOT; print(ROOT.gROOT.GetVersion())'
 python3 he3_cli.py --config config.example.toml
 ```
 
-Outputs are organized per variant under:
-`$NUCLEI_OUTPUT/<period>/<reco_pass>/<variant>/`
+Outputs are organized per variant and species under:
+`$NUCLEI_OUTPUT/<period>/<reco_pass>/<variant>/<species>/`
 including analysis ROOT files, metadata, and report assets.
 
 Show default merged config:
@@ -54,21 +56,23 @@ python3 he3_cli.py --config config.example.toml --dump-default-config
 
 ## Config schema
 
+- Built-in defaults live in `he3pp/defaults_he3.toml` and `he3pp/defaults_he4.toml`; your `--config` file only needs to override what you want to change.
+  - The base defaults are selected from `run.species` (`he3` or `he4`) before overrides are merged.
 - `[common]`: former `Common.h` style constants (period, reco pass, pt bins, ranges, etc.)
   - Input paths are derived from `period`/`reco_pass` (data) and `mc_production` (MC) plus optional basename keys:
   `data_tree_basename`, `data_analysis_results_basename`, `mc_tree_basename`, `mc_analysis_results_basename`
 - `[selections.common]`: shared selection snippets (e.g. skim template)
-- `[selections.he3]`: he3-specific selections (required when `he3` is in `run.species`)
-- `[selections.he4]`: he4-specific selections (required when `he4` is in `run.species`)
+- `[selections.<species>]`: species-specific selections (required only for the species selected in `[run].species`)
 - `[cuts]`: trial scan grids (`nsigmaDCAz`, `fTPCnCls`, `nITScls`, `nsigmaTPC`)
 - `[run]`: task + runtime flags
-- `[paths]`: optional non-derivable overrides (most IO paths are auto-derived)
+- `[particle.<species>]`: particle-profile definitions/overrides (mass, PDG, labels, key column names) for the selected species
+- `[paths]`: optional overrides only (all standard IO paths are auto-derived from `[common]` + `run.species`)
 
 Logging and metadata:
 
 - `[run].log_level`: `DEBUG|INFO|WARNING|ERROR`
 - `[paths].log_file`: optional log file path
-- `[paths].metadata_output`: JSON metadata output for each run
+- `[paths].metadata_output`: optional JSON metadata output path (otherwise auto-derived per species)
 
 Report controls:
 
@@ -76,18 +80,15 @@ Report controls:
 - `[report].fit_alpha`: Pearson threshold for signal-fit `OK/KO` labels
 - `[report].fit_tail`: `single` (default) or `two` for p-value computation
 - `[report].tpc_signal_model`: TPC-only model used for extraction plots + summary table
-- `[run].species`: processing/report species list (e.g. `["he3"]` or `["he3","he4"]`)
-- `[species.<name>.paths]`: optional species-specific path overrides (not required)
+- `[run].species`: single processing species key matching one section in `[particle]`
 
 Available report sections include:
 `signal_tof`, `signal_tpc`, `tof_tpc_2d`, `efficiency`, `pt_resolution`, `corrected_spectrum`.
 
-When two species are requested:
-- Both selection sections must exist: `[selections.he3]` and `[selections.he4]`
-- Generates per-species subreports in `<report_dir>/he3/` and `<report_dir>/he4/`
-- Generates a top-level index at `<report_dir>/index.html` linking both pages
-- If provided, uses species-specific path overrides from sections like:
-`[species.he3.paths]` and `[species.he4.paths]` (`data_input`, `mc_input`, `signal_input`, `systematics_input`, `metadata_output`)
+Single-particle mode:
+- Select one species with `[run].species`
+- Provide the matching selection and particle sections for that species only
+- Use task-specific keys under `[paths]` only when you need custom routing (`data_tree`, `mc_tree`, `*_output`, `*_input`, `report_dir`, etc.)
 
 ## Tasks
 
@@ -103,7 +104,7 @@ Supported tasks:
 
 ## Smoke validation
 
-Dual smoke (LHC24 data + LHC25b9 MC, He3 + He4):
+Smoke (LHC24 data + LHC25b9 MC, He3):
 
 ```bash
 scripts/update_smoke_references.sh   # one-time or when intentionally refreshing references
@@ -111,4 +112,20 @@ scripts/run_smoke_checks.sh
 ```
 
 Reference location used by smoke checks:
-`$NUCLEI_INPUT/smoke_references/python_dual/LHC24_apass1__LHC25b9/`
+`$NUCLEI_INPUT/smoke_references/python_single/LHC24_apass1__LHC25b9/`
+
+Legacy `tests/smoke/*.toml` files were retired; smoke is driven directly by the shell scripts above.
+
+## Regression tests
+
+Lightweight regression checks (kept separate from smoke):
+
+```bash
+scripts/run_regression_tests.sh
+```
+
+Coverage includes:
+- config/path derivation
+- TPC model production matrix mapping/validation
+- report fit-status classification (`OK`/`KO`/`UNK`/`MISSING`)
+- MC trial variation changing at least one trial histogram vs default (using smoke reference MC ROOT file)

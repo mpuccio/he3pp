@@ -10,8 +10,9 @@ from typing import Any
 
 import ROOT
 
-from . import settings as s
+from .settings import RuntimeConfig
 from .root_io import expand
+from .report_logic import status_from_metrics
 
 
 @dataclass
@@ -236,6 +237,19 @@ def _signal_tpc_bin_paths(signal_file: ROOT.TFile, species: str, model: str) -> 
     return out
 
 
+def _available_tpc_models(signal_file: ROOT.TFile, species: str) -> list[str]:
+    base = signal_file.Get(f"nuclei/{species}/TPConly")
+    if not base:
+        return []
+    models: set[str] = set()
+    for k in base.GetListOfKeys():
+        n = k.GetName()
+        if not n.startswith("hTPConly") or "_0_" not in n:
+            continue
+        models.add(n.rsplit("_", 1)[1])
+    return sorted(models)
+
+
 def _tof_tpc_2d_paths(data_file: ROOT.TFile, species: str) -> list[tuple[int, str]]:
     base = data_file.Get("nuclei")
     if not base:
@@ -317,11 +331,7 @@ def _nfit_from_metadata(sig_file: ROOT.TFile, section: str, species: str, tpc_si
 
 
 def _status_from_metrics(available: bool, metrics: dict[str, float], alpha: float) -> tuple[str, str]:
-    if not available:
-        return "MISSING", "missing"
-    if not metrics:
-        return "UNK", "unknown"
-    return ("OK", "ok") if metrics["p_value"] >= alpha else ("KO", "ko")
+    return status_from_metrics(available, metrics, alpha)
 
 
 def _hist_visible_max(h: Any) -> float:
@@ -446,8 +456,12 @@ def generate_report(
     fit_alpha: float = 0.05,
     fit_tail: str = "single",
     tpc_signal_model: str = "ExpGaus",
+    mc_hist_suffix: str = "He3",
     data_file_path: str | None = None,
+    *,
+    runtime_config: RuntimeConfig,
 ) -> str:
+    cfg = runtime_config
     report_dir = expand(report_dir)
     _mkdir(str(Path(report_dir) / "assets"))
     ROOT.gStyle.SetOptStat(0)
@@ -460,6 +474,14 @@ def generate_report(
     syst_file = ROOT.TFile(resolved["systematics"])
     data_file = ROOT.TFile(resolved["data"]) if "data" in resolved else None
 
+    available_models = _available_tpc_models(sig_file, species)
+    if tpc_signal_model not in available_models:
+        available_text = ", ".join(available_models) if available_models else "none"
+        raise RuntimeError(
+            f"Requested report.tpc_signal_model='{tpc_signal_model}' is missing for species '{species}'. "
+            f"Available TPC models: {available_text}."
+        )
+
     items: list[ReportItem] = []
     for bidx, p in _signal_tof_bin_paths(sig_file, species):
         items.append(ReportItem("signal_tof", f"TOF Signal Bin {bidx}", signal_file_path, p, f"assets/signal_tof_bin_{bidx:02d}.png", bin_index=bidx))
@@ -469,32 +491,33 @@ def generate_report(
         for bidx, p in _tof_tpc_2d_paths(data_file, species):
             items.append(ReportItem("tof_tpc_2d", f"m_TOF vs nσ_TPC Bin {bidx}", resolved["data"], p, f"assets/tof_mass_vs_tpc_nsigma_bin_{bidx:02d}.png", bin_index=bidx))
 
-    raw_name = "hRawCountsA0" if species == "antihe3" else "hRawCountsM0"
+    letter = _species_letter(species)
+    raw_name = f"hRawCounts{letter}0"
     items.append(
         ReportItem(
             "efficiency",
             "TPC/TOF Efficiency Overlay",
             mc_file_path,
-            "nuclei/effTPCA" if species == "antihe3" else "nuclei/effTPCM",
+            f"nuclei/effTPC{letter}",
             "assets/eff_tpc_tof_overlay.png",
             note="Uncertainty: binomial (both)",
-            overlay_path="nuclei/effTOFA" if species == "antihe3" else "nuclei/effTOFM",
+            overlay_path=f"nuclei/effTOF{letter}",
         )
     )
-    items.append(ReportItem("pt_resolution", "pT(rec)-pT(sim) Uncorrected", mc_file_path, "nuclei/hDeltaPtHe3", "assets/delta_pt_uncorrected.png"))
-    items.append(ReportItem("pt_resolution", "pT(rec)-pT(sim) Corrected", mc_file_path, "nuclei/hDeltaPtCorrHe3", "assets/delta_pt_corrected.png"))
-    items.append(ReportItem("corrected_spectrum", "Normalized Corrected Spectrum TPC", systematics_file_path, "fStatTPCA" if species == "antihe3" else "fStatTPCM", "assets/corrected_tpc_norm.png", overlay_path="fSystTPCA" if species == "antihe3" else "fSystTPCM"))
-    items.append(ReportItem("corrected_spectrum", "Normalized Corrected Spectrum TOF", systematics_file_path, "fStatTOFA" if species == "antihe3" else "fStatTOFM", "assets/corrected_tof_norm.png", overlay_path="fSystTOFA" if species == "antihe3" else "fSystTOFM"))
+    items.append(ReportItem("pt_resolution", "pT(rec)-pT(sim) Uncorrected", mc_file_path, f"nuclei/hDeltaPt{mc_hist_suffix}", "assets/delta_pt_uncorrected.png"))
+    items.append(ReportItem("pt_resolution", "pT(rec)-pT(sim) Corrected", mc_file_path, f"nuclei/hDeltaPtCorr{mc_hist_suffix}", "assets/delta_pt_corrected.png"))
+    items.append(ReportItem("corrected_spectrum", "Normalized Corrected Spectrum TPC", systematics_file_path, f"fStatTPC{letter}", "assets/corrected_tpc_norm.png", overlay_path=f"fSystTPC{letter}"))
+    items.append(ReportItem("corrected_spectrum", "Normalized Corrected Spectrum TOF", systematics_file_path, f"fStatTOF{letter}", "assets/corrected_tof_norm.png", overlay_path=f"fSystTOF{letter}"))
 
     file_map = {signal_file_path: sig_file, mc_file_path: mc_file, systematics_file_path: syst_file}
     if data_file:
         file_map[resolved["data"]] = data_file
 
     corrected_stats = [
-        _get(syst_file, "fStatTPCA" if species == "antihe3" else "fStatTPCM"),
-        _get(syst_file, "fSystTPCA" if species == "antihe3" else "fSystTPCM"),
-        _get(syst_file, "fStatTOFA" if species == "antihe3" else "fStatTOFM"),
-        _get(syst_file, "fSystTOFA" if species == "antihe3" else "fSystTOFM"),
+        _get(syst_file, f"fStatTPC{letter}"),
+        _get(syst_file, f"fSystTPC{letter}"),
+        _get(syst_file, f"fStatTOF{letter}"),
+        _get(syst_file, f"fSystTOF{letter}"),
     ]
     corr_max = max(_hist_visible_max(h) for h in corrected_stats)
     corr_pos = [v for v in (_hist_positive_min(h) for h in corrected_stats) if v is not None]
@@ -534,11 +557,10 @@ def generate_report(
         rows.append(RenderedItem(it, ok, status, status_class, note=it.note, metrics=metrics))
 
     row_by_section = {sec: [r for r in rows if r.item.section == sec] for sec in SECTION_DEFS}
-    letter = _species_letter(species)
     tof_yield = _get(sig_file, f"nuclei/{species}/GausExp/{raw_name}")
     tpc_yield = _get(sig_file, f"nuclei/{species}/TPConly/hTPConly{letter}0_{tpc_signal_model}")
-    tpc_eff = _get(mc_file, "nuclei/effTPCA" if species == "antihe3" else "nuclei/effTPCM")
-    tof_eff = _get(mc_file, "nuclei/effTOFA" if species == "antihe3" else "nuclei/effTOFM")
+    tpc_eff = _get(mc_file, f"nuclei/effTPC{letter}")
+    tof_eff = _get(mc_file, f"nuclei/effTOF{letter}")
 
     meta = {}
     if metadata_path and os.path.exists(expand(metadata_path)):
@@ -584,7 +606,7 @@ img { width:100%; border-radius:10px; border:1px solid #d6dddc; background:#ffff
         h.write(style)
         h.write("</head><body><main class='wrap'>")
         h.write("<h1>He3pp Analysis Report</h1>")
-        h.write(f"<p class='meta'><b>Variant:</b> {html.escape(s.VARIANT)} | <b>Species:</b> {html.escape(species)}</p>")
+        h.write(f"<p class='meta'><b>Variant:</b> {html.escape(cfg.variant)} | <b>Species:</b> {html.escape(species)}</p>")
         nav_items: list[str] = ["<a href='#section-fit-and-efficiency-summary'>Summary</a>"]
         for sec in section_order:
             title, _subtitle = SECTION_DEFS.get(sec, (sec, ""))
@@ -614,7 +636,10 @@ def generate_dual_report_index(
     report_dir: str,
     entries: list[dict[str, str]],
     metadata_path: str | None = None,
+    *,
+    runtime_config: RuntimeConfig,
 ) -> str:
+    cfg = runtime_config
     report_dir = expand(report_dir)
     _mkdir(report_dir)
     meta = {}
@@ -659,7 +684,7 @@ pre { white-space:pre-wrap; margin:10px 0 0; }
         h.write(style)
         h.write("</head><body><main class='wrap'>")
         h.write("<h1>He3pp Dual Report</h1>")
-        h.write(f"<p class='meta'><b>Variant:</b> {html.escape(s.VARIANT)} | <b>Species reports:</b> {len(entries)}</p>")
+        h.write(f"<p class='meta'><b>Variant:</b> {html.escape(cfg.variant)} | <b>Species reports:</b> {len(entries)}</p>")
         h.write(f"<section class='grid'>{''.join(cards)}</section>")
         if meta:
             h.write("<details><summary><b>Run Metadata</b></summary><pre>")

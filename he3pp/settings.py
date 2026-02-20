@@ -1,168 +1,315 @@
 from array import array
+import copy
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
-LETTER = ["M", "A"]
-NAMES = ["he3", "antihe3"]
-LABELS = ["^{3}He", "^{3}#bar{He}"]
+try:
+    import tomllib  # Python 3.11+
+except ModuleNotFoundError:  # pragma: no cover - runtime compatibility path
+    import tomli as tomllib
 
-MC_PRODUCTION = "LHC23j6b"
-RECO_PASS = "apass4"
-PERIOD = "LHC22"
-VARIANT = "giovanni"
-BASE_INPUT_DIR = "$NUCLEI_INPUT/"
-BASE_OUTPUT_ROOT = "$NUCLEI_OUTPUT/"
-FILTER_LIST_NAME = "nuclei"
-DATA_TREE_BASENAME = "AO2D.root"
-DATA_ANALYSIS_RESULTS_BASENAME = "AnalysisResults.root"
-MC_TREE_BASENAME = "AO2D_coalescence.root"
-MC_ANALYSIS_RESULTS_BASENAME = "AnalysisResults.root"
 
-BASE_REC_SELECTIONS = "fTPCnCls >= 110 && nITScls >= 5 && std::abs(fEta) < 0.9 && std::abs(fDCAxy) < 0.7 && pt > 0.8 && pt < 9.0"
-DEFAULT_REC_SELECTIONS = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) < 7 && std::abs(fDCAxy) < 0.2"
-HE4_BASE_SELECTION = "fTPCnCls >= 110 && nITScls >= 5 && abs(fEta) < 0.9 && std::abs(fDCAxy) < 0.7 && ptHe4 > 0.5 && ptHe4 < 9.0"
-HE4_PRIMARY_SELECTION = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) < 7 && std::abs(fDCAxy) < 0.2"
-SECONDARY_SELECTION = "fTPCnCls > 120 && nITScls >= 6 && std::abs(nsigmaDCAz) > 7 && std::abs(fDCAxy) < 0.2"
-HE3_TRIAL_DCA_SELECTION = "std::abs(fDCAxy) < 0.2"
-HE3_NSIGMA_TOF_CUT = 3.5
-HE4_NSIGMA_TOF_CUT = 3.0
-SKIM_SELECTION_TEMPLATE = "std::abs(nsigmaDCAz) < 8 && std::abs(fDCAxy) < 0.2 && std::abs({nsigma}) < 5"
-HE3_MC_RECO_APPEND = "&& isPrimary"
-HE3_MC_GEN_SELECTION = "isPrimary && std::abs(yMC) < 0.5"
-HE4_MC_PID_SELECTION = "isHe4 && isPrimary"
-HE4_MC_RECO_SELECTION = "nITScls > 4 && fTPCnCls > 110 && std::abs(fEta) < 0.9 && std::abs(rapidity) < 0.5"
-HE4_MC_GEN_SELECTION = "std::abs(yMC) < 0.5"
-HE4_MC_SIGNAL_TRACKING = "fTPCnCls > 120 && nITScls >= 6 && std::abs(fDCAz) < 0.7"
-
-N_PT_BINS = 12
-PT_BINS = [1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0, 4.5, 5.0]
-PT_BIN_ARRAY = array("d", PT_BINS)
+DEFAULTS_DIR = Path(__file__).parent
+DEFAULTS_BY_SPECIES = {
+    "he3": DEFAULTS_DIR / "defaults_he3.toml",
+    "he4": DEFAULTS_DIR / "defaults_he4.toml",
+}
 CENT_LENGTH = 1
-CENT_PT_LIMITS = [7.0]
-TPC_MAX_PT = 7.0
-TOF_MIN_PT = 1.0
-PT_RANGE = [1.4, 7.0]
-NTPC_FUNCTIONS = 3
-TPC_FUNCTION_NAMES = ["GausGaus", "ExpGaus", "ExpTailGaus", "LognormalLognormal"]
 # Weighted efficiency histograms are intentionally named "Weff*".
 WEIGHTED_EFF_NAMING_POLICY = "prefix_W"
 
-CUT_NAMES = {
-    "nsigmaDCAz": [6.0, 7.0, 8.0],
-    "fTPCnCls": [110.0, 120.0, 130.0],
-    "nITScls": [5.0, 6.0, 7.0],
-    "nsigmaTPC": [3.0, 4.0, 5.0],
-}
 
-BASE_OUTPUT_DIR = ""
-BASE_VARIANT_OUTPUT_DIR = ""
-DATA_TREE_FILENAME = ""
-DATA_FILENAME = ""
-DATA_FILENAME_HE4 = ""
-DATA_ANALYSIS_RESULTS = ""
-MC_ANALYSIS_RESULTS = ""
-MC_TREE_FILENAME = ""
-MC_FILENAME = ""
-MC_FILENAME_HE4 = ""
-SIGNAL_OUTPUT = ""
-SYSTEMATICS_OUTPUT = ""
+def _load_toml(path: Path) -> dict[str, Any]:
+    with open(path, "rb") as f:
+        cfg = tomllib.load(f)
+    if not isinstance(cfg, dict):
+        raise ValueError(f"Invalid defaults TOML at {path}: top-level table is missing.")
+    return cfg
 
 
-def recompute_derived_globals() -> None:
-    global BASE_OUTPUT_DIR
-    global BASE_VARIANT_OUTPUT_DIR
-    global DATA_TREE_FILENAME, DATA_FILENAME, DATA_FILENAME_HE4, DATA_ANALYSIS_RESULTS
-    global MC_ANALYSIS_RESULTS, MC_TREE_FILENAME, MC_FILENAME, MC_FILENAME_HE4
-    global SIGNAL_OUTPUT, SYSTEMATICS_OUTPUT
-
-    BASE_OUTPUT_DIR = f"{BASE_OUTPUT_ROOT}{PERIOD}/{RECO_PASS}/"
-    BASE_VARIANT_OUTPUT_DIR = f"{BASE_OUTPUT_DIR}{VARIANT}/"
-    DATA_TREE_FILENAME = f"{BASE_INPUT_DIR}data/{PERIOD}/{RECO_PASS}/{DATA_TREE_BASENAME}"
-    DATA_FILENAME = f"{BASE_VARIANT_OUTPUT_DIR}DataHistos.root"
-    DATA_FILENAME_HE4 = f"{BASE_VARIANT_OUTPUT_DIR}DataHistosHe4.root"
-    DATA_ANALYSIS_RESULTS = f"{BASE_INPUT_DIR}data/{PERIOD}/{RECO_PASS}/{DATA_ANALYSIS_RESULTS_BASENAME}"
-    MC_ANALYSIS_RESULTS = f"{BASE_INPUT_DIR}MC/{MC_PRODUCTION}/{MC_ANALYSIS_RESULTS_BASENAME}"
-    MC_TREE_FILENAME = f"{BASE_INPUT_DIR}MC/{MC_PRODUCTION}/{MC_TREE_BASENAME}"
-    MC_FILENAME = f"{BASE_VARIANT_OUTPUT_DIR}MChistos.root"
-    MC_FILENAME_HE4 = f"{BASE_VARIANT_OUTPUT_DIR}MChistosHe4.root"
-    SIGNAL_OUTPUT = f"{BASE_VARIANT_OUTPUT_DIR}signal.root"
-    SYSTEMATICS_OUTPUT = f"{BASE_VARIANT_OUTPUT_DIR}systematics.root"
+_DEFAULT_CONFIG_CACHE: dict[str, dict[str, Any]] = {}
 
 
-def apply_runtime_overrides(cfg: dict[str, Any]) -> None:
-    global MC_PRODUCTION, RECO_PASS, PERIOD, VARIANT, BASE_INPUT_DIR, BASE_OUTPUT_ROOT, FILTER_LIST_NAME
-    global DATA_TREE_BASENAME, DATA_ANALYSIS_RESULTS_BASENAME, MC_TREE_BASENAME, MC_ANALYSIS_RESULTS_BASENAME
-    global BASE_REC_SELECTIONS, DEFAULT_REC_SELECTIONS, HE4_BASE_SELECTION, HE4_PRIMARY_SELECTION
-    global SECONDARY_SELECTION, HE3_TRIAL_DCA_SELECTION, HE3_NSIGMA_TOF_CUT, HE4_NSIGMA_TOF_CUT
-    global SKIM_SELECTION_TEMPLATE
-    global HE3_MC_RECO_APPEND, HE3_MC_GEN_SELECTION, HE4_MC_PID_SELECTION, HE4_MC_RECO_SELECTION
-    global HE4_MC_GEN_SELECTION, HE4_MC_SIGNAL_TRACKING
-    global N_PT_BINS, PT_BINS, PT_BIN_ARRAY, CENT_PT_LIMITS, TPC_MAX_PT, TOF_MIN_PT, PT_RANGE
-    global TPC_FUNCTION_NAMES, CUT_NAMES
+def _normalize_species_name(species: str | None) -> str:
+    key = str(species or "he3").strip().lower()
+    if key not in DEFAULTS_BY_SPECIES:
+        raise ValueError(
+            f"Unsupported species '{key}'. Supported defaults: {', '.join(sorted(DEFAULTS_BY_SPECIES))}."
+        )
+    return key
 
-    common = cfg.get("common", {})
-    selections = cfg.get("selections", {})
-    sel_common = selections.get("common", {}) if isinstance(selections, dict) else {}
-    sel_he3 = selections.get("he3", {}) if isinstance(selections, dict) else {}
-    sel_he4 = selections.get("he4", {}) if isinstance(selections, dict) else {}
-    cuts = cfg.get("cuts", {})
 
-    MC_PRODUCTION = str(common.get("mc_production", MC_PRODUCTION))
-    RECO_PASS = str(common.get("reco_pass", RECO_PASS))
-    PERIOD = str(common.get("period", PERIOD))
-    VARIANT = str(common.get("variant", VARIANT))
-    BASE_INPUT_DIR = str(common.get("base_input_dir", BASE_INPUT_DIR))
-    BASE_OUTPUT_ROOT = str(common.get("base_output_root", BASE_OUTPUT_ROOT))
-    FILTER_LIST_NAME = str(common.get("filter_list_name", FILTER_LIST_NAME))
-    DATA_TREE_BASENAME = str(common.get("data_tree_basename", DATA_TREE_BASENAME))
-    DATA_ANALYSIS_RESULTS_BASENAME = str(common.get("data_analysis_results_basename", DATA_ANALYSIS_RESULTS_BASENAME))
-    MC_TREE_BASENAME = str(common.get("mc_tree_basename", MC_TREE_BASENAME))
-    MC_ANALYSIS_RESULTS_BASENAME = str(common.get("mc_analysis_results_basename", MC_ANALYSIS_RESULTS_BASENAME))
+def _species_from_run_cfg(run_cfg: dict[str, Any] | None) -> str | None:
+    if not isinstance(run_cfg, dict):
+        return None
+    raw = run_cfg.get("species")
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        return str(raw).strip().lower()
+    values = [str(v).strip().lower() for v in list(raw)]
+    if len(values) != 1:
+        raise ValueError("Single-particle mode: run.species must contain exactly one value.")
+    return values[0]
 
-    pt_bins = list(common.get("pt_bins", PT_BINS))
+
+def _species_hint_from_cfg(cfg: dict[str, Any] | None) -> str | None:
+    if not isinstance(cfg, dict):
+        return None
+    return _species_from_run_cfg(cfg.get("run"))
+
+
+def default_config_template(species: str | None = None) -> dict[str, Any]:
+    key = _normalize_species_name(species)
+    if key not in _DEFAULT_CONFIG_CACHE:
+        path = DEFAULTS_BY_SPECIES[key]
+        _DEFAULT_CONFIG_CACHE[key] = _load_toml(path)
+    return copy.deepcopy(_DEFAULT_CONFIG_CACHE[key])
+
+
+def _required_table(table: dict[str, Any], key: str, context: str = "defaults") -> dict[str, Any]:
+    value = table.get(key)
+    if not isinstance(value, dict):
+        raise ValueError(f"Missing or invalid [{key}] table in {context} config")
+    return value
+
+
+def _required_value(table: dict[str, Any], key: str, context: str) -> Any:
+    if key not in table:
+        raise ValueError(f"Missing required key '{context}.{key}'")
+    return table[key]
+
+
+def _deep_merge_dict(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    out = copy.deepcopy(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = _deep_merge_dict(out[key], value)
+        else:
+            out[key] = copy.deepcopy(value)
+    return out
+
+
+def merge_config(cfg: dict[str, Any] | None, species: str | None = None) -> dict[str, Any]:
+    hint = species or _species_hint_from_cfg(cfg) or "he3"
+    merged = default_config_template(hint)
+    if not isinstance(cfg, dict):
+        return merged
+    return _deep_merge_dict(merged, cfg)
+
+
+LETTER = ["M", "A"]
+
+
+@dataclass(frozen=True)
+class RuntimePaths:
+    base_output_dir: str
+    base_variant_output_dir: str
+    data_tree_filename: str
+    data_filename: str
+    data_analysis_results: str
+    mc_analysis_results: str
+    mc_tree_filename: str
+    mc_filename: str
+    signal_output: str
+    systematics_output: str
+
+    def species_stage_paths(self, species: str) -> dict[str, str]:
+        base = f"{self.base_variant_output_dir}{species}/"
+        return {
+            "data_output": f"{base}DataHistos.root",
+            "data_input": f"{base}DataHistos.root",
+            "mc_output": f"{base}MChistos.root",
+            "mc_input": f"{base}MChistos.root",
+            "signal_output": f"{base}signal.root",
+            "signal_input": f"{base}signal.root",
+            "systematics_output": f"{base}systematics.root",
+            "systematics_input": f"{base}systematics.root",
+            "checkpoint_output": f"{base}checkpoint.root",
+            "metadata_output": f"{base}run_metadata.json",
+            "report_dir": f"{base}report",
+        }
+
+
+@dataclass(frozen=True)
+class RuntimeConfig:
+    variant: str
+    letter: list[str]
+    filter_list_name: str
+    n_pt_bins: int
+    pt_bins: list[float]
+    pt_bin_array: array
+    cent_length: int
+    cent_pt_limits: list[float]
+    tpc_max_pt: float
+    tof_min_pt: float
+    pt_range: list[float]
+    tpc_function_names: list[str]
+    cut_names: dict[str, list[float]]
+    skim_selection_template: str
+    particle_configs: dict[str, dict[str, Any]]
+    paths: RuntimePaths
+
+    def get_particle_config(self, species: str) -> dict[str, Any]:
+        if species not in self.particle_configs:
+            raise ValueError(
+                f"Unsupported species '{species}'. Available: {', '.join(sorted(self.particle_configs))}."
+            )
+        return copy.deepcopy(self.particle_configs[species])
+
+
+def _resolve_particle_profile(species: str, particle_table: dict[str, Any], stack: list[str]) -> dict[str, Any]:
+    if species in stack:
+        cycle = " -> ".join(stack + [species])
+        raise ValueError(f"Circular particle template chain: {cycle}")
+
+    profile = particle_table.get(species)
+    if not isinstance(profile, dict):
+        raise ValueError(f"Missing [particle.{species}] table in config.")
+
+    own = copy.deepcopy(profile)
+    template = own.pop("template", None)
+    if template is None:
+        return own
+
+    template_key = str(template).strip().lower()
+    base = _resolve_particle_profile(template_key, particle_table, stack + [species])
+    base.update(own)
+    return base
+
+
+def _build_particle_configs(cfg: dict[str, Any], species: str) -> dict[str, dict[str, Any]]:
+    selections = _required_table(cfg, "selections", "config")
+    sel_species = _required_table(selections, species, "selections")
+    particle_table = _required_table(cfg, "particle", "config")
+
+    profile = _resolve_particle_profile(species, particle_table, [])
+
+    base_sel = str(_required_value(sel_species, "base_rec", f"selections.{species}"))
+    primary_raw = sel_species.get("primary_rec", sel_species.get("default_rec"))
+    if primary_raw is None:
+        raise ValueError(
+            f"Missing required key 'selections.{species}.primary_rec' (or 'default_rec')."
+        )
+    primary_sel = str(primary_raw)
+    secondary_sel = str(_required_value(sel_species, "secondary_rec", f"selections.{species}"))
+
+    profile["base_sel"] = base_sel
+    profile["primary_sel"] = primary_sel
+    profile["secondary_sel"] = secondary_sel
+    profile["trial_dca_sel"] = str(sel_species.get("trial_dca", profile.get("trial_dca_sel", "")))
+    profile["tof_nsigma_cut"] = float(_required_value(sel_species, "nsigma_tof", f"selections.{species}"))
+
+    if "mc_reco_base" in sel_species:
+        profile["mc_reco_base_sel"] = str(sel_species["mc_reco_base"])
+    elif "mc_reco_append" in sel_species:
+        profile["mc_reco_base_sel"] = f"{base_sel}{str(sel_species['mc_reco_append'])}"
+    else:
+        profile["mc_reco_base_sel"] = str(profile.get("mc_reco_base_sel", ""))
+
+    if "mc_reco" in sel_species:
+        profile["mc_reco_sel"] = str(sel_species["mc_reco"])
+    else:
+        profile["mc_reco_sel"] = str(profile.get("mc_reco_sel", primary_sel))
+
+    if "mc_gen" in sel_species:
+        profile["mc_gen_sel"] = str(sel_species["mc_gen"])
+    elif "mc_gen_sel" not in profile:
+        raise ValueError(f"Missing required key 'selections.{species}.mc_gen' or particle profile mc_gen_sel.")
+
+    profile["mc_signal_tracking"] = str(sel_species.get("mc_signal_tracking", profile.get("mc_signal_tracking", "")))
+
+    return {species: profile}
+
+
+def _build_runtime_paths(common: dict[str, Any]) -> RuntimePaths:
+    period = str(_required_value(common, "period", "common"))
+    reco_pass = str(_required_value(common, "reco_pass", "common"))
+    mc_production = str(_required_value(common, "mc_production", "common"))
+    variant = str(_required_value(common, "variant", "common"))
+    base_input_dir = str(_required_value(common, "base_input_dir", "common"))
+    base_output_root = str(_required_value(common, "base_output_root", "common"))
+    data_tree_basename = str(_required_value(common, "data_tree_basename", "common"))
+    data_analysis_results_basename = str(_required_value(common, "data_analysis_results_basename", "common"))
+    mc_tree_basename = str(_required_value(common, "mc_tree_basename", "common"))
+    mc_analysis_results_basename = str(_required_value(common, "mc_analysis_results_basename", "common"))
+
+    base_output_dir = f"{base_output_root}{period}/{reco_pass}/"
+    base_variant_output_dir = f"{base_output_dir}{variant}/"
+
+    return RuntimePaths(
+        base_output_dir=base_output_dir,
+        base_variant_output_dir=base_variant_output_dir,
+        data_tree_filename=f"{base_input_dir}data/{period}/{reco_pass}/{data_tree_basename}",
+        data_filename=f"{base_variant_output_dir}DataHistos.root",
+        data_analysis_results=f"{base_input_dir}data/{period}/{reco_pass}/{data_analysis_results_basename}",
+        mc_analysis_results=f"{base_input_dir}MC/{mc_production}/{mc_analysis_results_basename}",
+        mc_tree_filename=f"{base_input_dir}MC/{mc_production}/{mc_tree_basename}",
+        mc_filename=f"{base_variant_output_dir}MChistos.root",
+        signal_output=f"{base_variant_output_dir}signal.root",
+        systematics_output=f"{base_variant_output_dir}systematics.root",
+    )
+
+
+def current_runtime_config(cfg: dict[str, Any] | None = None) -> RuntimeConfig:
+    merged = merge_config(cfg)
+
+    run_cfg = _required_table(merged, "run", "config")
+    species = _species_from_run_cfg(run_cfg)
+    if species is None:
+        raise ValueError("Missing run.species in config.")
+
+    common = _required_table(merged, "common", "config")
+    selections = _required_table(merged, "selections", "config")
+    sel_common = _required_table(selections, "common", "selections")
+    cuts = _required_table(merged, "cuts", "config")
+
+    pt_bins = [float(v) for v in list(_required_value(common, "pt_bins", "common"))]
     if len(pt_bins) < 2:
         raise ValueError("common.pt_bins must contain at least 2 edges.")
-    PT_BINS = [float(v) for v in pt_bins]
-    N_PT_BINS = len(PT_BINS) - 1
-    PT_BIN_ARRAY = array("d", PT_BINS)
 
-    cent_pt_limits = [float(v) for v in common.get("cent_pt_limits", CENT_PT_LIMITS)]
+    cent_pt_limits = [float(v) for v in list(_required_value(common, "cent_pt_limits", "common"))]
     if len(cent_pt_limits) != CENT_LENGTH:
         raise ValueError(f"common.cent_pt_limits must have length {CENT_LENGTH}.")
-    CENT_PT_LIMITS = cent_pt_limits
 
-    TPC_MAX_PT = float(common.get("tpc_max_pt", TPC_MAX_PT))
-    TOF_MIN_PT = float(common.get("tof_min_pt", TOF_MIN_PT))
-    PT_RANGE = [float(v) for v in common.get("pt_range", PT_RANGE)]
-    if len(PT_RANGE) != 2:
+    pt_range = [float(v) for v in list(_required_value(common, "pt_range", "common"))]
+    if len(pt_range) != 2:
         raise ValueError("common.pt_range must have 2 values: [min, max].")
 
-    tpc_names = list(common.get("tpc_function_names", TPC_FUNCTION_NAMES))
-    if len(tpc_names) < NTPC_FUNCTIONS:
-        raise ValueError(f"common.tpc_function_names must have at least {NTPC_FUNCTIONS} entries.")
-    TPC_FUNCTION_NAMES = [str(v) for v in tpc_names]
+    tpc_function_names = [str(v) for v in list(_required_value(common, "tpc_function_names", "common"))]
+    if not tpc_function_names:
+        raise ValueError("common.tpc_function_names must contain at least one entry.")
 
-    BASE_REC_SELECTIONS = str(sel_he3.get("base_rec", BASE_REC_SELECTIONS))
-    DEFAULT_REC_SELECTIONS = str(sel_he3.get("default_rec", DEFAULT_REC_SELECTIONS))
-    HE4_BASE_SELECTION = str(sel_he4.get("base_rec", HE4_BASE_SELECTION))
-    HE4_PRIMARY_SELECTION = str(sel_he4.get("primary_rec", HE4_PRIMARY_SELECTION))
-    SECONDARY_SELECTION = str(sel_he3.get("secondary_rec", sel_he4.get("secondary_rec", SECONDARY_SELECTION)))
-    HE3_TRIAL_DCA_SELECTION = str(sel_he3.get("trial_dca", HE3_TRIAL_DCA_SELECTION))
-    HE3_NSIGMA_TOF_CUT = float(sel_he3.get("nsigma_tof", HE3_NSIGMA_TOF_CUT))
-    HE4_NSIGMA_TOF_CUT = float(sel_he4.get("nsigma_tof", HE4_NSIGMA_TOF_CUT))
-    SKIM_SELECTION_TEMPLATE = str(sel_common.get("skim_template", SKIM_SELECTION_TEMPLATE))
-    HE3_MC_RECO_APPEND = str(sel_he3.get("mc_reco_append", HE3_MC_RECO_APPEND))
-    HE3_MC_GEN_SELECTION = str(sel_he3.get("mc_gen", HE3_MC_GEN_SELECTION))
-    HE4_MC_PID_SELECTION = str(sel_he4.get("mc_pid", HE4_MC_PID_SELECTION))
-    HE4_MC_RECO_SELECTION = str(sel_he4.get("mc_reco", HE4_MC_RECO_SELECTION))
-    HE4_MC_GEN_SELECTION = str(sel_he4.get("mc_gen", HE4_MC_GEN_SELECTION))
-    HE4_MC_SIGNAL_TRACKING = str(sel_he4.get("mc_signal_tracking", HE4_MC_SIGNAL_TRACKING))
+    cut_names = {
+        "nsigmaDCAz": [float(v) for v in list(_required_value(cuts, "nsigmaDCAz", "cuts"))],
+        "fTPCnCls": [float(v) for v in list(_required_value(cuts, "fTPCnCls", "cuts"))],
+        "nITScls": [float(v) for v in list(_required_value(cuts, "nITScls", "cuts"))],
+        "nsigmaTPC": [float(v) for v in list(_required_value(cuts, "nsigmaTPC", "cuts"))],
+    }
 
-    CUT_NAMES["nsigmaDCAz"] = [float(v) for v in cuts.get("nsigmaDCAz", CUT_NAMES["nsigmaDCAz"])]
-    CUT_NAMES["fTPCnCls"] = [float(v) for v in cuts.get("fTPCnCls", CUT_NAMES["fTPCnCls"])]
-    CUT_NAMES["nITScls"] = [float(v) for v in cuts.get("nITScls", CUT_NAMES["nITScls"])]
-    CUT_NAMES["nsigmaTPC"] = [float(v) for v in cuts.get("nsigmaTPC", CUT_NAMES["nsigmaTPC"])]
+    paths = _build_runtime_paths(common)
+    particle_configs = _build_particle_configs(merged, species)
 
-    recompute_derived_globals()
+    return RuntimeConfig(
+        variant=str(_required_value(common, "variant", "common")),
+        letter=copy.deepcopy(LETTER),
+        filter_list_name=str(_required_value(common, "filter_list_name", "common")),
+        n_pt_bins=len(pt_bins) - 1,
+        pt_bins=pt_bins,
+        pt_bin_array=array("d", pt_bins),
+        cent_length=CENT_LENGTH,
+        cent_pt_limits=cent_pt_limits,
+        tpc_max_pt=float(_required_value(common, "tpc_max_pt", "common")),
+        tof_min_pt=float(_required_value(common, "tof_min_pt", "common")),
+        pt_range=pt_range,
+        tpc_function_names=tpc_function_names,
+        cut_names=cut_names,
+        skim_selection_template=str(_required_value(sel_common, "skim_template", "selections.common")),
+        particle_configs=particle_configs,
+        paths=paths,
+    )
 
 
-recompute_derived_globals()
+def get_particle_config(species: str, cfg: dict[str, Any] | None = None) -> dict[str, Any]:
+    return current_runtime_config(cfg).get_particle_config(species)
