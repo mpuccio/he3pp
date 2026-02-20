@@ -42,7 +42,6 @@ CENT_PT_LIMITS = [7.0]
 TPC_MAX_PT = 7.0
 TOF_MIN_PT = 1.0
 PT_RANGE = [1.4, 7.0]
-NTPC_FUNCTIONS = 3
 TPC_FUNCTION_NAMES = ["GausGaus", "ExpGaus", "ExpTailGaus", "LognormalLognormal"]
 # Weighted efficiency histograms are intentionally named "Weff*".
 WEIGHTED_EFF_NAMING_POLICY = "prefix_W"
@@ -215,8 +214,8 @@ def apply_runtime_overrides(cfg: dict[str, Any]) -> None:
         raise ValueError("common.pt_range must have 2 values: [min, max].")
 
     tpc_names = list(common.get("tpc_function_names", TPC_FUNCTION_NAMES))
-    if len(tpc_names) < NTPC_FUNCTIONS:
-        raise ValueError(f"common.tpc_function_names must have at least {NTPC_FUNCTIONS} entries.")
+    if not tpc_names:
+        raise ValueError("common.tpc_function_names must contain at least one entry.")
     TPC_FUNCTION_NAMES = [str(v) for v in tpc_names]
 
     BASE_REC_SELECTIONS = str(sel_he3.get("base_rec", BASE_REC_SELECTIONS))

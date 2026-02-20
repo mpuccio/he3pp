@@ -236,6 +236,19 @@ def _signal_tpc_bin_paths(signal_file: ROOT.TFile, species: str, model: str) -> 
     return out
 
 
+def _available_tpc_models(signal_file: ROOT.TFile, species: str) -> list[str]:
+    base = signal_file.Get(f"nuclei/{species}/TPConly")
+    if not base:
+        return []
+    models: set[str] = set()
+    for k in base.GetListOfKeys():
+        n = k.GetName()
+        if not n.startswith("hTPConly") or "_0_" not in n:
+            continue
+        models.add(n.rsplit("_", 1)[1])
+    return sorted(models)
+
+
 def _tof_tpc_2d_paths(data_file: ROOT.TFile, species: str) -> list[tuple[int, str]]:
     base = data_file.Get("nuclei")
     if not base:
@@ -460,6 +473,14 @@ def generate_report(
     mc_file = ROOT.TFile(resolved["mc"])
     syst_file = ROOT.TFile(resolved["systematics"])
     data_file = ROOT.TFile(resolved["data"]) if "data" in resolved else None
+
+    available_models = _available_tpc_models(sig_file, species)
+    if tpc_signal_model not in available_models:
+        available_text = ", ".join(available_models) if available_models else "none"
+        raise RuntimeError(
+            f"Requested report.tpc_signal_model='{tpc_signal_model}' is missing for species '{species}'. "
+            f"Available TPC models: {available_text}."
+        )
 
     items: list[ReportItem] = []
     for bidx, p in _signal_tof_bin_paths(sig_file, species):

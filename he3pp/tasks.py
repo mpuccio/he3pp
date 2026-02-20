@@ -11,6 +11,10 @@ from .root_io import build_rdf_from_ao2d, define_columns_for_data, ensure_parent
 LOGGER = logging.getLogger("he3pp.tasks")
 
 
+def _default_tpc_model_name() -> str:
+    return "ExpGaus" if "ExpGaus" in TPC_FUNCTION_NAMES else str(TPC_FUNCTION_NAMES[0])
+
+
 def _weighted_eff_name(base: str) -> str:
     # Weighted efficiencies intentionally use "Weff*" naming.
     return f"W{base}"
@@ -287,12 +291,12 @@ def _book_mc_species(df_data: Any, particle: str, enable_trials: bool, tag: str 
             for cut_tpc in CUT_NAMES["fTPCnCls"]:
                 d_tpc = d_dca.Filter(f"fTPCnCls > {cut_tpc}")
                 for cut_its in CUT_NAMES["nITScls"]:
-                    _ = d_tpc.Filter(f"nITScls >= {cut_its}")
+                    d_its = d_tpc.Filter(f"nITScls >= {cut_its}")
                     for label, matter_sel in matter_map.items():
-                        h_reco_tpc[label].append(reco_df_for_trials.Filter(matter_sel).Histo1D(h1_model(f"TPC{label}{tpc_name}{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt"))
-                        h_reco_tof[label].append(reco_df_for_trials.Filter(f"{matter_sel} && hasTOF").Histo1D(h1_model(f"TOF{label}{tpc_name}{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt"))
-                        h_reco_tpc_w[label].append(reco_df_for_trials.Filter(matter_sel).Histo1D(h1_model(f"TPC{label}{tpc_name}W{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight"))
-                        h_reco_tof_w[label].append(reco_df_for_trials.Filter(f"{matter_sel} && hasTOF").Histo1D(h1_model(f"TOF{label}{tpc_name}W{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight"))
+                        h_reco_tpc[label].append(d_its.Filter(matter_sel).Histo1D(h1_model(f"TPC{label}{tpc_name}{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt"))
+                        h_reco_tof[label].append(d_its.Filter(f"{matter_sel} && hasTOF").Histo1D(h1_model(f"TOF{label}{tpc_name}{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt"))
+                        h_reco_tpc_w[label].append(d_its.Filter(matter_sel).Histo1D(h1_model(f"TPC{label}{tpc_name}W{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight"))
+                        h_reco_tof_w[label].append(d_its.Filter(f"{matter_sel} && hasTOF").Histo1D(h1_model(f"TOF{label}{tpc_name}W{n_trials}{tag}", ";#it{p}_{T}^{rec} (GeV/#it{c});Counts"), "pt", "ptWeight"))
                     n_trials += 1
 
     actions = (
@@ -475,6 +479,12 @@ def signal(input_file: str, output_file: str, particle: str = "he3") -> None:
     ptr(f_lnl.mMu).setRange(-0.5, 0.5)
 
     tpc_functions = [f_gg, f_eg, f_etg, f_lnl]
+    tpc_model_names = [str(name) for name in TPC_FUNCTION_NAMES]
+    if len(tpc_model_names) > len(tpc_functions):
+        raise RuntimeError(
+            f"Configured {len(tpc_model_names)} TPC function names but only {len(tpc_functions)} fit functions are available."
+        )
+    n_tpc_functions = len(tpc_model_names)
 
     for key in in_file.GetListOfKeys():
         key_name = key.GetName()
@@ -503,8 +513,8 @@ def signal(input_file: str, output_file: str, particle: str = "he3") -> None:
         h_chi = [[None] * CENT_LENGTH for _ in range(2)]
         h_chi_tpc = [[None] * CENT_LENGTH for _ in range(2)]
         h_npar = [[None] * CENT_LENGTH for _ in range(2)]
-        h_npar_tpc = [[[None] * NTPC_FUNCTIONS for _ in range(CENT_LENGTH)] for _ in range(2)]
-        h_tpconly = [[[None] * NTPC_FUNCTIONS for _ in range(CENT_LENGTH)] for _ in range(2)]
+        h_npar_tpc = [[[None] * n_tpc_functions for _ in range(CENT_LENGTH)] for _ in range(2)]
+        h_tpconly = [[[None] * n_tpc_functions for _ in range(CENT_LENGTH)] for _ in range(2)]
         h_widen = [[None] * CENT_LENGTH for _ in range(2)]
         h_shift = [[None] * CENT_LENGTH for _ in range(2)]
         h_widen_tpc = [[None] * CENT_LENGTH for _ in range(2)]
@@ -529,9 +539,9 @@ def signal(input_file: str, output_file: str, particle: str = "he3") -> None:
 
         for i_s in range(2):
             i_c = 0
-            for i_t in range(NTPC_FUNCTIONS):
-                h_tpconly[i_s][i_c][i_t] = ROOT.TH1D(f"hTPConly{LETTER[i_s]}{i_c}_{TPC_FUNCTION_NAMES[i_t]}", ";p_{T} GeV/c; TPC raw counts", n_pt_bins, pt_labels.GetArray())
-                h_npar_tpc[i_s][i_c][i_t] = ROOT.TH1D(f"hNFloatParsTPC{LETTER[i_s]}{i_c}_{TPC_FUNCTION_NAMES[i_t]}", "; p_{T}(GeV/c); N_{float} (TPC fit)", n_pt_bins, pt_labels.GetArray())
+            for i_t, model_name in enumerate(tpc_model_names):
+                h_tpconly[i_s][i_c][i_t] = ROOT.TH1D(f"hTPConly{LETTER[i_s]}{i_c}_{model_name}", ";p_{T} GeV/c; TPC raw counts", n_pt_bins, pt_labels.GetArray())
+                h_npar_tpc[i_s][i_c][i_t] = ROOT.TH1D(f"hNFloatParsTPC{LETTER[i_s]}{i_c}_{model_name}", "; p_{T}(GeV/c); N_{float} (TPC fit)", n_pt_bins, pt_labels.GetArray())
             h_signif[i_s][i_c] = ROOT.TH1D(f"hSignificance{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); #frac{S}{#sqrt{S+B}}", n_pt_bins, pt_labels.GetArray())
             h_chi[i_s][i_c] = ROOT.TH1D(f"hChiSquare{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); #chi^{2}/NDF", n_pt_bins, pt_labels.GetArray())
             h_chi_tpc[i_s][i_c] = ROOT.TH1D(f"hChiSquareTPC{LETTER[i_s]}{i_c}", "; p_{T}(GeV/c); #chi^{2}/NDF", n_pt_bins, pt_labels.GetArray())
@@ -630,9 +640,9 @@ def signal(input_file: str, output_file: str, particle: str = "he3") -> None:
                 if center_pt < TPC_MAX_PT:
                     d_out.cd(f"{species_names[i_s]}/TPConly")
                     tpc_dat = tpc_h[i_s].ProjectionY(f"tpc_data{i_c}_{i_b}", i_b + 1, i_b + 1)
-                    for i_t in range(NTPC_FUNCTIONS):
+                    for i_t, model_name in enumerate(tpc_model_names):
                         fit_range = "Special" if (i_t and center_pt < 1.8) else "Full"
-                        tpc_plot = tpc_functions[i_t].FitData(tpc_dat, f"TPC_d_{i_c}_{i_b}_{TPC_FUNCTION_NAMES[i_t]}", i_title, fit_range, fit_range)
+                        tpc_plot = tpc_functions[i_t].FitData(tpc_dat, f"TPC_d_{i_c}_{i_b}_{model_name}", i_title, fit_range, fit_range)
                         ptr(tpc_functions[i_t].mSigma).setConstant(False)
                         tpc_plot.Write()
                         h_npar_tpc[i_s][i_c][i_t].SetBinContent(i_b + 1, float(getattr(tpc_functions[i_t], "mNFloatPars", 0)))
@@ -656,7 +666,7 @@ def signal(input_file: str, output_file: str, particle: str = "he3") -> None:
             h_signif[i_s][i_c].Write()
 
             d_out.cd(f"{species_names[i_s]}/TPConly")
-            for i_t in range(NTPC_FUNCTIONS):
+            for i_t in range(n_tpc_functions):
                 h_tpconly[i_s][i_c][i_t].Write()
                 h_npar_tpc[i_s][i_c][i_t].Write()
 
@@ -721,7 +731,9 @@ def systematics(signal_file: str, mc_file: str, data_analysis_results: str, outp
         list_mc = f_mc.Get(key_name)
 
         h_data_tof = [[[None for _ in range(3)] for _ in range(2)] for _ in range(2)]
-        h_data_tpc = [[None for _ in range(3)] for _ in range(2)]
+        tpc_model_names = [str(name) for name in TPC_FUNCTION_NAMES]
+        default_tpc_model_name = _default_tpc_model_name()
+        h_data_tpc = [[None for _ in range(len(tpc_model_names))] for _ in range(2)]
         h_eff_tpc = [None, None]
         h_eff_tof = [None, None]
 
@@ -747,14 +759,20 @@ def systematics(signal_file: str, mc_file: str, data_analysis_results: str, outp
                 if default_tof[i_s] is None:
                     default_tof[i_s] = h_data_tof[i_s][i_tof][0].Clone(f"defaultTOF{species_names[i_s]}")
 
-            for i_tpc in range(3):
-                name = TPC_FUNCTION_NAMES[i_tpc]
+            for i_tpc, name in enumerate(tpc_model_names):
                 h_data_tpc[i_s][i_tpc] = data_dir.Get(f"TPConly/hTPConly{LETTER[i_s]}0_{name}")
-                if default_tpc_uncorr[i_s] is None and i_tpc == 1:
+                if h_data_tpc[i_s][i_tpc] is None:
+                    raise RuntimeError(f"Missing TPC signal histogram for model '{name}' in {species_names[i_s]}.")
+                if default_tpc_uncorr[i_s] is None and name == default_tpc_model_name:
                     default_tpc_uncorr[i_s] = h_data_tpc[i_s][i_tpc].Clone(f"defaultTPCuncorr{species_names[i_s]}")
                 h_data_tpc[i_s][i_tpc].Divide(h_eff_tpc[i_s])
-                if default_tpc[i_s] is None and i_tpc == 1:
+                if default_tpc[i_s] is None and name == default_tpc_model_name:
                     default_tpc[i_s] = h_data_tpc[i_s][i_tpc].Clone(f"defaultTPC{species_names[i_s]}")
+            if default_tpc_uncorr[i_s] is None or default_tpc[i_s] is None:
+                raise RuntimeError(
+                    f"Default TPC model '{default_tpc_model_name}' not found for {species_names[i_s]}. "
+                    f"Available models: {', '.join(tpc_model_names)}."
+                )
 
         for i_s in range(2):
             for i_b in range(1, N_PT_BINS + 1):
@@ -762,7 +780,7 @@ def systematics(signal_file: str, mc_file: str, data_analysis_results: str, outp
                 default_val_tpc = default_tpc[i_s].GetBinContent(i_b)
                 default_val_tof = default_tof[i_s].GetBinContent(i_b)
                 if default_val_tpc != 0:
-                    for i_tpc in range(3):
+                    for i_tpc in range(len(tpc_model_names)):
                         value = h_data_tpc[i_s][i_tpc].GetBinContent(i_b)
                         syst_tpc[i_s].Fill(pt, (value - default_val_tpc) / default_val_tpc)
                 if default_val_tof != 0:
@@ -893,7 +911,14 @@ def checkpoint(systematics_file: str, data_ar_file: str, mc_file: str, mc_ar_fil
     out.mkdir("Data")
     out.cd("Data")
     data_ar.Get("nuclei-spectra/spectra/hRecVtxZData").Clone("events_reconstructed").Write()
-    sig.Get(f"nuclei/{anti_name}/TPConly/hTPConlyA0_ExpGaus").Clone("tpc_rawcounts").Write()
+    default_tpc_model_name = _default_tpc_model_name()
+    tpc_raw = sig.Get(f"nuclei/{anti_name}/TPConly/hTPConlyA0_{default_tpc_model_name}")
+    if not tpc_raw:
+        raise RuntimeError(
+            f"Missing checkpoint TPC raw counts for model '{default_tpc_model_name}'. "
+            f"Available configured models: {', '.join(TPC_FUNCTION_NAMES)}."
+        )
+    tpc_raw.Clone("tpc_rawcounts").Write()
     sig.Get(f"nuclei/{anti_name}/GausExp/hRawCountsA0").Clone("tof_rawcounts").Write()
 
     out.Close()
