@@ -1,9 +1,6 @@
 #include "FitModules.h"
-#include "Common.h"
 #include "RooGausExp.h"
 #include "RooGausDExp.h"
-#include "Utils.h"
-using namespace utils;
 
 #include <TLegend.h>
 
