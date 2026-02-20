@@ -106,7 +106,6 @@ def default_config() -> dict:
             "enable_trials": True,
             "skim": False,
             "draw": False,
-            "is_mc": True,
             "log_level": "INFO",
         },
         "species": {},
@@ -243,9 +242,7 @@ def run(cfg: dict) -> None:
             ROOT.EnableImplicitMT()
 
     t0 = time.time()
-    if task == "merge_trees":
-        tasks.merge_trees(path_cfg.get("input", s.MC_TREE_FILENAME), path_cfg.get("output", "MergedAO2D.root"), bool(run_cfg.get("is_mc", True)))
-    elif task == "analyse_data":
+    if task == "analyse_data":
         input_file = path_cfg.get("input", s.DATA_TREE_FILENAME)
         selected_outputs = {
             sp: _resolve_species_path(

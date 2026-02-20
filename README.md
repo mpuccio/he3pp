@@ -94,7 +94,7 @@ When two species are requested:
 
 Supported tasks:
 
-`merge_trees | analyse_data | analyse_mc | signal | systematics | checkpoint | report | full_chain`
+`analyse_data | analyse_mc | signal | systematics | checkpoint | report | full_chain`
 
 ## Notes
 

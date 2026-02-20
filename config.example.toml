@@ -47,14 +47,13 @@ nITScls = [5.0, 6.0, 7.0]
 nsigmaTPC = [3.0, 4.0, 5.0]
 
 [run]
-task = "analyse_data"      # merge_trees | analyse_data | analyse_mc | signal | systematics | checkpoint | report | full_chain
+task = "analyse_data"      # analyse_data | analyse_mc | signal | systematics | checkpoint | report | full_chain
 species = ["he3", "he4"]   # choose one or many among: he3, he4
 enable_mt = true
 nthreads = 0                # 0 -> ROOT default
 enable_trials = true
 skim = false
 draw = false
-is_mc = true                # only used for merge_trees
 log_level = "INFO"          # DEBUG | INFO | WARNING | ERROR
 
 [report]

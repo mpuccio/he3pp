@@ -970,30 +970,3 @@ def checkpoint(systematics_file: str, data_ar_file: str, mc_file: str, mc_ar_fil
     out.Close()
     LOGGER.info("checkpoint done output=%s", output_file if output_file else "auto")
 
-
-def merge_trees(input_file: str, output_file: str, is_mc: bool = True) -> None:
-    LOGGER.info("merge_trees start input=%s output=%s is_mc=%s", input_file, output_file, is_mc)
-    in_f = ROOT.TFile(expand(input_file))
-    keys = ROOT.gDirectory.GetListOfKeys()
-    out_list = ROOT.TList()
-    tree_name = "O2nucleitablemc" if is_mc else "O2nucleitable"
-
-    for i in range(keys.GetEntries()):
-        key = keys.At(i)
-        key_name = key.GetName()
-        if key.IsFolder() and key_name.startswith("DF"):
-            d = in_f.Get(key_name)
-            tree = d.Get(tree_name)
-            if tree:
-                out_list.Add(tree)
-
-    out_name = expand(output_file)
-    ensure_parent(out_name)
-    out_f = ROOT.TFile(out_name, "RECREATE")
-    if out_list.GetSize() == 0:
-        raise RuntimeError("No trees found to merge.")
-    new_tree = ROOT.TTree.MergeTrees(out_list)
-    new_tree.SetName(tree_name)
-    new_tree.Write()
-    out_f.Close()
-    LOGGER.info("merge_trees done output=%s", output_file)
