@@ -242,7 +242,7 @@ def run(cfg: dict) -> None:
 
     t0 = time.time()
     if task == "analyse_data":
-        input_file = path_cfg.get("input", s.DATA_TREE_FILENAME)
+        input_file = path_cfg.get("data_tree", s.DATA_TREE_FILENAME)
         selected_outputs = {
             sp: _resolve_species_path(
                 cfg,
@@ -250,13 +250,11 @@ def run(cfg: dict) -> None:
                 sp,
                 "data_output",
                 legacy_key=f"data_output_{sp}",
-                generic_key="output",
+                generic_key="data_output",
                 default=None,
             )
             for sp in species
         }
-        if len(selected_outputs) == 1 and "output" in path_cfg:
-            selected_outputs[species[0]] = path_cfg.get("output")
         tasks.analyse_data_multi(input_file, selected_outputs, bool(run_cfg.get("skim", False)), draw)
     elif task == "analyse_mc":
         input_file = path_cfg.get("mc_tree", s.MC_TREE_FILENAME)
@@ -267,13 +265,11 @@ def run(cfg: dict) -> None:
                 sp,
                 "mc_output",
                 legacy_key=f"mc_output_{sp}",
-                generic_key="output",
+                generic_key="mc_output",
                 default=None,
             )
             for sp in species
         }
-        if len(selected_outputs) == 1 and "output" in path_cfg:
-            selected_outputs[species[0]] = path_cfg.get("output")
         tasks.analyse_mc_multi(input_file, selected_outputs, bool(run_cfg.get("enable_trials", True)), draw)
     elif task == "signal":
         tasks.signal(path_cfg.get("input", s.DATA_FILENAME), path_cfg.get("output", s.SIGNAL_OUTPUT))
